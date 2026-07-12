@@ -1,0 +1,19 @@
+schema_version: 1
+nodes:
+  - id: greeter
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5
+      system: "Greet the user."
+  - id: closer
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5
+      system: "Say goodbye."
+edges:
+  - from: START
+    to: greeter
+  - from: greeter
+    to: closer
+  - from: closer
+    to: END

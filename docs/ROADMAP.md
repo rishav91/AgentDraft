@@ -56,7 +56,7 @@ signal on the project's central risk - see Sequencing rationale below.
 
 **Sub-phases:**
 
-- [ ] 1.1 - Multi-node graphs: `nodes` and `edges` sections compile to a `StateGraph` with matching
+- [x] 1.1 - Multi-node graphs: `nodes` and `edges` sections compile to a `StateGraph` with matching
   structure (`FR-1.1`).
 - [ ] 1.2 - Field-level validation errors (missing fields, dangling edge references, unrecognized
   providers) and the `agentdraft validate` command (`FR-1.2`, remainder of `FR-1.3`, `FR-3.1`,

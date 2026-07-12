@@ -1,17 +1,19 @@
 """Schema types and loading for AgentDraft.
 
-Phase 0 scope only: a single node, a single LLM call, no tools, no
-branching. The full multi-node/edge/tool schema is Phase 1 (see
-docs/ROADMAP.md and docs/requirements/system-requirements.md FR-1.1-FR-1.6).
+Phase 1 scope: multi-node graphs with explicit edges (FR-1.1). A schema with
+exactly one node and no `edges` section is still accepted and implicitly
+wired START -> node -> END, preserving Phase 0 skeleton schemas.
 """
 
 from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 SUPPORTED_SCHEMA_VERSION = 1
+START = "START"
+END = "END"
 
 
 class LLMConfig(BaseModel):
@@ -25,29 +27,54 @@ class Node(BaseModel):
     llm: LLMConfig
 
 
+class Edge(BaseModel):
+    from_: str = Field(alias="from")
+    to: str
+
+    model_config = {"populate_by_name": True}
+
+
 class Schema(BaseModel):
     schema_version: int
     nodes: list[Node]
+    edges: list[Edge] = []
 
-    @field_validator("schema_version")
-    @classmethod
-    def _check_version(cls, v: int) -> int:
-        if v != SUPPORTED_SCHEMA_VERSION:
+    @model_validator(mode="after")
+    def _check_version(self) -> "Schema":
+        if self.schema_version != SUPPORTED_SCHEMA_VERSION:
             raise ValueError(
-                f"unsupported schema_version {v!r}: this AgentDraft build "
-                f"supports schema_version {SUPPORTED_SCHEMA_VERSION}"
+                f"schema_version: unsupported value {self.schema_version!r} - this AgentDraft "
+                f"build supports schema_version {SUPPORTED_SCHEMA_VERSION}"
             )
-        return v
+        return self
 
-    @field_validator("nodes")
-    @classmethod
-    def _check_single_node(cls, v: list[Node]) -> list[Node]:
-        if len(v) != 1:
-            raise ValueError(
-                "Phase 0 skeleton supports exactly one node "
-                f"(got {len(v)}); multi-node graphs land in Phase 1"
-            )
-        return v
+    @model_validator(mode="after")
+    def _check_nodes(self) -> "Schema":
+        if not self.nodes:
+            raise ValueError("nodes: at least one node is required")
+
+        ids = [node.id for node in self.nodes]
+        seen: set[str] = set()
+        for node_id in ids:
+            if node_id in seen:
+                raise ValueError(f"nodes: duplicate node id {node_id!r}")
+            seen.add(node_id)
+
+        if not self.edges:
+            if len(self.nodes) > 1:
+                raise ValueError(
+                    "edges: required when a schema has more than one node - "
+                    "add an `edges` section wiring them together"
+                )
+            return self
+
+        known = seen | {START, END}
+        for edge in self.edges:
+            if edge.from_ not in known:
+                raise ValueError(f"edges: 'from' references unknown node {edge.from_!r}")
+            if edge.to not in known:
+                raise ValueError(f"edges: 'to' references unknown node {edge.to!r}")
+        return self
 
 
 def load_schema(path: str | Path) -> Schema:
