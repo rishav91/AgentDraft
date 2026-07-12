@@ -81,6 +81,17 @@ def test_rejects_dangling_edge_reference() -> None:
         )
 
 
+def test_rejects_edge_from_unknown_node() -> None:
+    with pytest.raises(ValidationError, match="'from' references unknown node 'ghost'"):
+        Schema.model_validate(
+            {
+                "schema_version": 1,
+                "nodes": [{"id": "a", "llm": {"provider": "anthropic", "model": "x"}}],
+                "edges": [{"from": "ghost", "to": "a"}],
+            }
+        )
+
+
 def test_rejects_unrecognized_provider() -> None:
     with pytest.raises(ValidationError, match="unrecognized provider 'not-a-real-provider'"):
         Schema.model_validate(

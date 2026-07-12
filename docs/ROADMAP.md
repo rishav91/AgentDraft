@@ -38,11 +38,7 @@ with a unit test on the compiler and an e2e test on `agentdraft run` covering it
 
 ## Phase 1 - CLI (the MVP)
 
-**Status:** Not started.
-The Phase 0 skeleton already covers some of this phase's ground as a byproduct - `schema_version`
-validation (`FR-1.10`) and single-node, provider-agnostic LLM config (part of `FR-1.3`) both exist
-today - but no Phase 1 sub-phase below is complete until its full scope, including the multi-node
-case, is met.
+**Status:** Done.
 
 **Goal:** a declarative schema expressive enough for real single-agent, tool-calling agents,
 compiled to LangGraph, authored and run via CLI.
@@ -69,7 +65,7 @@ signal on the project's central risk - see Sequencing rationale below.
   callable at compile time, with a clear import error on failure (`FR-1.6`, `FR-2.2`, `ADR-004`).
 - [x] 1.6 - `agentdraft explain` command and the stable, documented exit-code taxonomy across
   `validate`/`run`/`explain` (`FR-3.3`, `FR-3.4`).
-- [ ] 1.7 - Phase 1 exit bar: full `NFR-6.1`-`NFR-6.3` test coverage in place, and the
+- [x] 1.7 - Phase 1 exit bar: full `NFR-6.1`-`NFR-6.3` test coverage in place, and the
   schema-expressiveness metric (`PRD §6`) checked against at least one real, non-trivial agent.
 
 **Exit criteria:** CI green; the full P0 requirements list ([requirements](requirements/system-requirements.md#p0-summary--the-phase-1-mvp))

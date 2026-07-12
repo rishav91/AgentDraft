@@ -304,3 +304,37 @@ def test_missing_provider_package_raises_compile_error(mock_init_chat_model: Mag
 
     with pytest.raises(CompileError, match="nodes\\['chat'\\].llm.*langchain_anthropic"):
         compile_schema(schema)
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_tool_bound_node_with_conditional_edge_raises_compile_error(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value = mock_llm
+    mock_init_chat_model.return_value = mock_llm
+    schema = Schema(
+        schema_version=1,
+        nodes=[
+            Node(
+                id="chat",
+                llm=LLMConfig(provider="anthropic", model="claude-sonnet-5"),
+                tools=["tests.support.tools:echo"],
+            ),
+            Node(id="b", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(id="c", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+        ],
+        edges=[
+            Edge(from_="START", to="chat"),
+            Edge(
+                from_="chat",
+                condition="tests.support.routing:by_last_message_content",
+                routes={"positive": "b", "negative": "c"},
+            ),
+            Edge(from_="b", to="END"),
+            Edge(from_="c", to="END"),
+        ],
+    )
+
+    with pytest.raises(CompileError, match="'chat'.*exactly one direct"):
+        compile_schema(schema)
