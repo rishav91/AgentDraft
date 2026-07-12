@@ -31,9 +31,30 @@ class Node(BaseModel):
 
 class Edge(BaseModel):
     from_: str = Field(alias="from")
-    to: str
+    to: str | None = None
+    condition: str | None = None
+    routes: dict[str, str] | None = None
 
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _check_shape(self) -> "Edge":
+        is_conditional = self.condition is not None or self.routes is not None
+        if self.to is not None and is_conditional:
+            raise ValueError(
+                f"edges: edge from {self.from_!r} sets both 'to' and 'condition'/'routes' - "
+                "an edge is either direct ('to') or conditional ('condition' + 'routes'), not both"
+            )
+        if self.to is None and not is_conditional:
+            raise ValueError(
+                f"edges: edge from {self.from_!r} sets neither 'to' nor 'condition'/'routes'"
+            )
+        if is_conditional and (self.condition is None or not self.routes):
+            raise ValueError(
+                f"edges: conditional edge from {self.from_!r} requires both "
+                "'condition' and a non-empty 'routes' mapping"
+            )
+        return self
 
 
 class Schema(BaseModel):
@@ -71,11 +92,28 @@ class Schema(BaseModel):
             return self
 
         known = seen | {START, END}
+        by_source: dict[str, list[Edge]] = {}
         for edge in self.edges:
             if edge.from_ not in known:
                 raise ValueError(f"edges: 'from' references unknown node {edge.from_!r}")
-            if edge.to not in known:
+            if edge.to is not None and edge.to not in known:
                 raise ValueError(f"edges: 'to' references unknown node {edge.to!r}")
+            if edge.routes is not None:
+                for key, target in edge.routes.items():
+                    if target not in known:
+                        raise ValueError(
+                            f"edges: routes[{key!r}] from {edge.from_!r} references "
+                            f"unknown node {target!r}"
+                        )
+            by_source.setdefault(edge.from_, []).append(edge)
+
+        for source, out_edges in by_source.items():
+            has_conditional = any(edge.condition is not None for edge in out_edges)
+            if has_conditional and len(out_edges) > 1:
+                raise ValueError(
+                    f"edges: {source!r} has a conditional edge, which must be its only "
+                    "outgoing edge"
+                )
         return self
 
     @model_validator(mode="after")

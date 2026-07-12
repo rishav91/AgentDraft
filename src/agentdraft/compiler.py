@@ -1,9 +1,10 @@
 """Compile a validated Schema into a real LangGraph StateGraph.
 
-Phase 1 scope: multiple nodes wired by explicit `edges` (FR-1.1), and
-per-node tool bindings compiled to LangGraph's own `ToolNode`/`tools_condition`
-primitives (FR-1.4). A schema with one node and no edges compiles to the
-Phase 0 straight line START -> node -> END.
+Phase 1 scope: multiple nodes wired by explicit `edges` (FR-1.1); per-node tool
+bindings compiled to LangGraph's own `ToolNode`/`tools_condition` primitives
+(FR-1.4); and conditional edges, whose routing function is a custom-code
+handler reference resolved at compile time (FR-1.5, `ADR-004`). A schema with
+one node and no edges compiles to the Phase 0 straight line START -> node -> END.
 """
 
 from collections import defaultdict
@@ -44,6 +45,13 @@ def _resolve_tools(node: Node) -> list[Any]:
             raise CompileError(f"nodes[{node.id!r}].tools: {exc}") from exc
         tools.append(tool)
     return tools
+
+
+def _resolve_handler(ref: str, *, context: str) -> Any:
+    try:
+        return resolve_reference(ref)
+    except HandlerResolutionError as exc:
+        raise CompileError(f"{context}: {exc}") from exc
 
 
 def _make_llm_node(node: Node, llm: Any) -> Callable[[AgentState], AgentState]:
@@ -95,17 +103,29 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
 
     for source, out_edges in edges_by_source.items():
         if source in tool_node_names:
-            if len(out_edges) != 1:
+            if len(out_edges) != 1 or out_edges[0].to is None:
                 raise CompileError(
-                    f"nodes[{source!r}]: a tool-bound node must have exactly one outgoing "
-                    f"edge (taken when the LLM does not call a tool), got {len(out_edges)}"
+                    f"nodes[{source!r}]: a tool-bound node must have exactly one direct "
+                    "outgoing edge (taken when the LLM does not call a tool); conditional "
+                    "edges are not supported on a tool-bound node"
                 )
             target = _resolve(out_edges[0].to)
             graph.add_conditional_edges(
                 source, tools_condition, {"tools": tool_node_names[source], END: target}
             )
+        elif len(out_edges) == 1 and out_edges[0].condition is not None:
+            edge = out_edges[0]
+            condition_ref = edge.condition
+            assert condition_ref is not None  # enforced by Schema validation
+            condition_fn = _resolve_handler(condition_ref, context=f"edges[{source!r}].condition")
+            graph.add_conditional_edges(
+                source,
+                condition_fn,
+                {key: _resolve(target) for key, target in (edge.routes or {}).items()},
+            )
         else:
             for edge in out_edges:
+                assert edge.to is not None  # enforced by Schema validation
                 graph.add_edge(_resolve(source), _resolve(edge.to))
 
     return graph.compile()

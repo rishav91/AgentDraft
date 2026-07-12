@@ -162,3 +162,90 @@ def test_unresolvable_tool_reference_raises_compile_error(mock_init_chat_model: 
 
     with pytest.raises(CompileError, match="nodes\\['chat'\\].tools"):
         compile_schema(schema)
+
+
+def _make_conditional_schema() -> Schema:
+    return Schema(
+        schema_version=1,
+        nodes=[
+            Node(id="router", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(id="yes_path", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(id="no_path", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+        ],
+        edges=[
+            Edge(from_="START", to="router"),
+            Edge(
+                from_="router",
+                condition="tests.support.routing:by_last_message_content",
+                routes={"positive": "yes_path", "negative": "no_path"},
+            ),
+            Edge(from_="yes_path", to="END"),
+            Edge(from_="no_path", to="END"),
+        ],
+    )
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_compile_schema_wires_conditional_edge(mock_init_chat_model: MagicMock) -> None:
+    mock_init_chat_model.return_value = MagicMock()
+    schema = _make_conditional_schema()
+
+    graph = compile_schema(schema)
+
+    node_names = set(graph.get_graph().nodes) - {"__start__", "__end__"}
+    assert node_names == {"router", "yes_path", "no_path"}
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_conditional_edge_routes_to_the_matching_branch(mock_init_chat_model: MagicMock) -> None:
+    responses = {
+        "router": AIMessage(content="yes, absolutely"),
+        "yes_path": AIMessage(content="took the yes branch"),
+        "no_path": AIMessage(content="took the no branch"),
+    }
+    call_order: list[str] = []
+
+    def make_llm(node_name: str) -> MagicMock:
+        llm = MagicMock()
+
+        def invoke(messages: list[object]) -> AIMessage:
+            call_order.append(node_name)
+            return responses[node_name]
+
+        llm.invoke.side_effect = invoke
+        return llm
+
+    mock_init_chat_model.side_effect = [
+        make_llm("router"),
+        make_llm("yes_path"),
+        make_llm("no_path"),
+    ]
+    schema = _make_conditional_schema()
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="well?")]})
+
+    assert call_order == ["router", "yes_path"]
+    assert result["messages"][-1].content == "took the yes branch"
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_conditional_edge_with_unresolvable_condition_raises_compile_error(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    mock_init_chat_model.return_value = MagicMock()
+    schema = Schema(
+        schema_version=1,
+        nodes=[
+            Node(id="router", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(id="b", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+        ],
+        edges=[
+            Edge(from_="START", to="router"),
+            Edge(from_="router", condition="no.such.module:thing", routes={"k": "b"}),
+            Edge(from_="b", to="END"),
+        ],
+    )
+
+    with pytest.raises(CompileError, match="edges\\['router'\\].condition"):
+        compile_schema(schema)

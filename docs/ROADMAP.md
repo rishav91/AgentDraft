@@ -63,7 +63,7 @@ signal on the project's central risk - see Sequencing rationale below.
   `NFR-2.1`).
 - [x] 1.3 - Tool bindings: a node's bound tools compile so the LLM can invoke them via LangGraph's
   native tool-calling mechanism (`FR-1.4`).
-- [ ] 1.4 - Conditional/branching edges compile to a LangGraph conditional edge with matching
+- [x] 1.4 - Conditional/branching edges compile to a LangGraph conditional edge with matching
   routing behavior (`FR-1.5`).
 - [ ] 1.5 - Custom-code escape hatch: a `handler: module:function` reference resolves to the
   callable at compile time, with a clear import error on failure (`FR-1.6`, `FR-2.2`, `ADR-004`).

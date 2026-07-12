@@ -89,3 +89,67 @@ def test_rejects_unrecognized_provider() -> None:
                 "nodes": [{"id": "chat", "llm": {"provider": "not-a-real-provider", "model": "x"}}],
             }
         )
+
+
+def _two_node_schema_dict(edges: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "nodes": [
+            {"id": "a", "llm": {"provider": "anthropic", "model": "x"}},
+            {"id": "b", "llm": {"provider": "anthropic", "model": "x"}},
+        ],
+        "edges": edges,
+    }
+
+
+def test_parses_conditional_edge() -> None:
+    schema = Schema.model_validate(
+        _two_node_schema_dict(
+            [{"from": "a", "condition": "tests.support.routing:by_last_message_content",
+              "routes": {"positive": "b", "negative": "END"}}]
+        )
+    )
+
+    edge = schema.edges[0]
+    assert edge.condition == "tests.support.routing:by_last_message_content"
+    assert edge.routes == {"positive": "b", "negative": "END"}
+
+
+def test_rejects_edge_with_both_to_and_condition() -> None:
+    with pytest.raises(ValidationError, match="sets both 'to' and 'condition'"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [{"from": "a", "to": "b", "condition": "x:y", "routes": {"k": "b"}}]
+            )
+        )
+
+
+def test_rejects_edge_with_neither_to_nor_condition() -> None:
+    with pytest.raises(ValidationError, match="sets neither 'to' nor 'condition'"):
+        Schema.model_validate(_two_node_schema_dict([{"from": "a"}]))
+
+
+def test_rejects_conditional_edge_missing_routes() -> None:
+    with pytest.raises(ValidationError, match="requires both 'condition' and a non-empty 'routes'"):
+        Schema.model_validate(_two_node_schema_dict([{"from": "a", "condition": "x:y"}]))
+
+
+def test_rejects_conditional_edge_with_dangling_route_target() -> None:
+    with pytest.raises(ValidationError, match="routes\\['k'\\].*unknown node 'ghost'"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [{"from": "a", "condition": "x:y", "routes": {"k": "ghost"}}]
+            )
+        )
+
+
+def test_rejects_conditional_edge_alongside_another_edge_from_same_source() -> None:
+    with pytest.raises(ValidationError, match="'a' has a conditional edge"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [
+                    {"from": "a", "condition": "x:y", "routes": {"k": "b"}},
+                    {"from": "a", "to": "b"},
+                ]
+            )
+        )
