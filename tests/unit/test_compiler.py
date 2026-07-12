@@ -295,3 +295,12 @@ def test_handler_node_mixed_with_llm_nodes(mock_init_chat_model: MagicMock) -> N
     result = graph.invoke({"messages": [HumanMessage(content="hello")]})
 
     assert result["messages"][-1].content == "HI"
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_missing_provider_package_raises_compile_error(mock_init_chat_model: MagicMock) -> None:
+    mock_init_chat_model.side_effect = ImportError("Unable to import langchain_anthropic")
+    schema = _make_schema()
+
+    with pytest.raises(CompileError, match="nodes\\['chat'\\].llm.*langchain_anthropic"):
+        compile_schema(schema)

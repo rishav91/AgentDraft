@@ -83,7 +83,10 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
 
         tools = _resolve_tools(node)
         assert node.llm is not None  # enforced by Schema validation
-        llm: Any = init_chat_model(node.llm.model, model_provider=node.llm.provider)
+        try:
+            llm: Any = init_chat_model(node.llm.model, model_provider=node.llm.provider)
+        except ImportError as exc:
+            raise CompileError(f"nodes[{node.id!r}].llm: {exc}") from exc
         if tools:
             llm = llm.bind_tools(tools)
         graph.add_node(node.id, _make_llm_node(node, llm))

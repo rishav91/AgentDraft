@@ -4,10 +4,22 @@ time. Shared by tool bindings (FR-1.4) and the custom-code escape hatch
 """
 
 import importlib
+import os
+import sys
 
 
 class HandlerResolutionError(Exception):
     """Raised when a `module.path:attribute` reference cannot be resolved."""
+
+
+def _ensure_cwd_importable() -> None:
+    # The installed `agentdraft` console script sets sys.path[0] to its own
+    # install directory, not the caller's cwd (unlike `python -c`/`python -m`),
+    # so a user's own tool/handler modules next to their schema file would
+    # otherwise never resolve.
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
 
 
 def resolve_reference(ref: str) -> object:
@@ -17,6 +29,7 @@ def resolve_reference(ref: str) -> object:
         raise HandlerResolutionError(
             f"{ref!r} is not a valid reference - expected the form 'module.path:attribute'"
         )
+    _ensure_cwd_importable()
     try:
         module = importlib.import_module(module_path)
     except ImportError as exc:
