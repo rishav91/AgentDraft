@@ -67,7 +67,7 @@ signal on the project's central risk - see Sequencing rationale below.
   routing behavior (`FR-1.5`).
 - [x] 1.5 - Custom-code escape hatch: a `handler: module:function` reference resolves to the
   callable at compile time, with a clear import error on failure (`FR-1.6`, `FR-2.2`, `ADR-004`).
-- [ ] 1.6 - `agentdraft explain` command and the stable, documented exit-code taxonomy across
+- [x] 1.6 - `agentdraft explain` command and the stable, documented exit-code taxonomy across
   `validate`/`run`/`explain` (`FR-3.3`, `FR-3.4`).
 - [ ] 1.7 - Phase 1 exit bar: full `NFR-6.1`-`NFR-6.3` test coverage in place, and the
   schema-expressiveness metric (`PRD §6`) checked against at least one real, non-trivial agent.

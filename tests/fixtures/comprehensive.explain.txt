@@ -1,0 +1,13 @@
+schema_version: 1
+
+nodes:
+  - router (llm: anthropic/claude-sonnet-5)
+  - search (llm: anthropic/claude-sonnet-5)
+      tools: tests.support.tools:echo
+  - shout (handler: tests.support.handlers:uppercase_last_message)
+
+edges:
+  - START -> router
+  - router -[tests.support.routing:by_last_message_content]-> {positive -> search, negative -> shout}
+  - search -> shout
+  - shout -> END

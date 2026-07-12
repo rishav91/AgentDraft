@@ -1,0 +1,4 @@
+schema_version: 1
+nodes:
+  - id: shout
+    handler: no.such.module:thing

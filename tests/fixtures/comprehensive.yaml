@@ -1,0 +1,28 @@
+schema_version: 1
+nodes:
+  - id: router
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5
+      system: "Decide whether the user wants to search or just chat."
+  - id: search
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5
+      system: "Answer using the echo tool when asked to echo something."
+    tools:
+      - tests.support.tools:echo
+  - id: shout
+    handler: tests.support.handlers:uppercase_last_message
+edges:
+  - from: START
+    to: router
+  - from: router
+    condition: tests.support.routing:by_last_message_content
+    routes:
+      positive: search
+      negative: shout
+  - from: search
+    to: shout
+  - from: shout
+    to: END

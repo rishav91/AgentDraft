@@ -138,3 +138,40 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
                 graph.add_edge(_resolve(source), _resolve(edge.to))
 
     return graph.compile()
+
+
+def explain_schema(schema: Schema) -> str:
+    """Render a schema's compiled structure as text, without executing it (FR-3.3).
+
+    Compiles the schema first, purely to surface the same compile-time errors
+    `run` would hit (unresolvable tool/handler references) - no LLM or tool
+    call happens either way, since compiling only constructs client objects.
+    """
+    compile_schema(schema)
+
+    lines = [f"schema_version: {schema.schema_version}", "", "nodes:"]
+    for node in schema.nodes:
+        if node.handler is not None:
+            lines.append(f"  - {node.id} (handler: {node.handler})")
+        else:
+            assert node.llm is not None  # enforced by Schema validation
+            lines.append(f"  - {node.id} (llm: {node.llm.provider}/{node.llm.model})")
+            if node.tools:
+                lines.append(f"      tools: {', '.join(node.tools)}")
+
+    lines.append("")
+    lines.append("edges:")
+    if not schema.edges:
+        only_node = schema.nodes[0]
+        lines.append(f"  - START -> {only_node.id}")
+        lines.append(f"  - {only_node.id} -> END")
+    else:
+        for edge in schema.edges:
+            if edge.condition is not None:
+                route_items = (edge.routes or {}).items()
+                routes = ", ".join(f"{key} -> {target}" for key, target in route_items)
+                lines.append(f"  - {edge.from_} -[{edge.condition}]-> {{{routes}}}")
+            else:
+                lines.append(f"  - {edge.from_} -> {edge.to}")
+
+    return "\n".join(lines)
