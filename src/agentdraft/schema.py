@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from langchain.chat_models.base import _SUPPORTED_PROVIDERS
 from pydantic import BaseModel, Field, model_validator
 
 SUPPORTED_SCHEMA_VERSION = 1
@@ -74,6 +75,17 @@ class Schema(BaseModel):
                 raise ValueError(f"edges: 'from' references unknown node {edge.from_!r}")
             if edge.to not in known:
                 raise ValueError(f"edges: 'to' references unknown node {edge.to!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _check_providers(self) -> "Schema":
+        for node in self.nodes:
+            if node.llm.provider not in _SUPPORTED_PROVIDERS:
+                supported = ", ".join(sorted(_SUPPORTED_PROVIDERS))
+                raise ValueError(
+                    f"nodes[{node.id!r}].llm.provider: unrecognized provider "
+                    f"{node.llm.provider!r} - supported providers: {supported}"
+                )
         return self
 
 

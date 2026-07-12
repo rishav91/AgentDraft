@@ -58,7 +58,7 @@ signal on the project's central risk - see Sequencing rationale below.
 
 - [x] 1.1 - Multi-node graphs: `nodes` and `edges` sections compile to a `StateGraph` with matching
   structure (`FR-1.1`).
-- [ ] 1.2 - Field-level validation errors (missing fields, dangling edge references, unrecognized
+- [x] 1.2 - Field-level validation errors (missing fields, dangling edge references, unrecognized
   providers) and the `agentdraft validate` command (`FR-1.2`, remainder of `FR-1.3`, `FR-3.1`,
   `NFR-2.1`).
 - [ ] 1.3 - Tool bindings: a node's bound tools compile so the LLM can invoke them via LangGraph's

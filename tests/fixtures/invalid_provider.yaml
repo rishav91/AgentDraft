@@ -1,0 +1,6 @@
+schema_version: 1
+nodes:
+  - id: chat
+    llm:
+      provider: not-a-real-provider
+      model: some-model

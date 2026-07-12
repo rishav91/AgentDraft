@@ -79,3 +79,13 @@ def test_rejects_dangling_edge_reference() -> None:
                 "edges": [{"from": "a", "to": "ghost"}],
             }
         )
+
+
+def test_rejects_unrecognized_provider() -> None:
+    with pytest.raises(ValidationError, match="unrecognized provider 'not-a-real-provider'"):
+        Schema.model_validate(
+            {
+                "schema_version": 1,
+                "nodes": [{"id": "chat", "llm": {"provider": "not-a-real-provider", "model": "x"}}],
+            }
+        )
