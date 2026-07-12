@@ -7,3 +7,6 @@ __pycache__/
 *.egg-info/
 .lavish/
 .coverage
+canvas/node_modules/
+canvas/dist/
+canvas/*.tsbuildinfo

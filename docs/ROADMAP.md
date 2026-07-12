@@ -74,16 +74,18 @@ is met, including `NFR-6.1`-`NFR-6.3` test coverage; the schema-expressiveness s
 
 ## Phase 2 - Canvas
 
-**Status:** Not started.
+**Status:** In progress (2.1 done; 2.2/2.3 not started).
 
 **Goal:** see and edit an agent's graph visually - the project's actual wedge
 ([PRD §1](PRD.md#1-problem)) - on a schema format already proven by real Phase 1 usage.
 
 **What ships:** a visual renderer for a compiled schema's structure (nodes, edges, routing,
 tool bindings - the same structure `agentdraft explain` already prints as text), then editing
-capability once viewing is solid. Exact scope (read-only-first vs. viewer+editor together) is a
-Phase 2 planning decision, not fixed here - the sub-phase split below reflects that default
-sequencing and may be revised when Phase 2 is actually planned.
+capability once viewing is solid. 2.1's stack is decided (`ADR-007`): a standalone React +
+TypeScript + Vite app (`canvas/`) using React Flow, reading a static `agentdraft explain --format
+json` (`FR-3.5`) export client-side - no backend process. 2.2's editing interface (how canvas
+changes get written back to the schema file) is not yet decided - a Phase 2.2 planning decision,
+not fixed here.
 
 **What it unlocks:** the tool's primary value proposition actually lands. Also the second named
 failure condition becomes testable: does the canvas stay in sync with everything the schema can
@@ -91,15 +93,15 @@ express, or does it drift ([PRD §7](PRD.md#7-risks))?
 
 **Sub-phases:**
 
-- [ ] 2.1 - Read-only canvas: render a compiled schema's structure (nodes, edges, routing, tool
+- [x] 2.1 - Read-only canvas: render a compiled schema's structure (nodes, edges, routing, tool
   bindings) with no divergence from what `agentdraft explain` prints for the same schema.
 - [ ] 2.2 - Editing capability: modify a graph visually and write the changes back to the schema.
-- [ ] 2.3 - Canvas CI and sync guarantee: CI extended to cover canvas code (framework/test-tooling
-  TBD when Phase 2 scope is planned).
+- [ ] 2.3 - Canvas CI and sync guarantee: CI extended to cover canvas code (test-tooling TBD when
+  2.3 is planned; the framework itself is decided per `ADR-007`).
 
-**Exit criteria:** CI green (extended to cover canvas code, exact framework/test-tooling TBD when
-Phase 2 scope is planned); every construct the schema can express is renderable in the canvas, with
-no divergence between what `agentdraft explain` prints and what the canvas shows for the same schema.
+**Exit criteria:** CI green (extended to cover canvas code, exact test-tooling TBD when 2.3 is
+planned); every construct the schema can express is renderable in the canvas, with no divergence
+between what `agentdraft explain` prints and what the canvas shows for the same schema.
 
 ## Phase 3+ - Meta-agent and AgentWeave
 
