@@ -65,7 +65,7 @@ signal on the project's central risk - see Sequencing rationale below.
   native tool-calling mechanism (`FR-1.4`).
 - [x] 1.4 - Conditional/branching edges compile to a LangGraph conditional edge with matching
   routing behavior (`FR-1.5`).
-- [ ] 1.5 - Custom-code escape hatch: a `handler: module:function` reference resolves to the
+- [x] 1.5 - Custom-code escape hatch: a `handler: module:function` reference resolves to the
   callable at compile time, with a clear import error on failure (`FR-1.6`, `FR-2.2`, `ADR-004`).
 - [ ] 1.6 - `agentdraft explain` command and the stable, documented exit-code taxonomy across
   `validate`/`run`/`explain` (`FR-3.3`, `FR-3.4`).

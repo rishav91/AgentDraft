@@ -1,8 +1,10 @@
 """Schema types and loading for AgentDraft.
 
-Phase 1 scope: multi-node graphs with explicit edges (FR-1.1). A schema with
-exactly one node and no `edges` section is still accepted and implicitly
-wired START -> node -> END, preserving Phase 0 skeleton schemas.
+Phase 1 scope: multi-node graphs with explicit edges (FR-1.1); a node is
+either LLM-backed (`llm`, with optional `tools`, FR-1.4) or custom-code
+(`handler`, FR-1.6, `ADR-004`), never both. A schema with exactly one node
+and no `edges` section is still accepted and implicitly wired
+START -> node -> END, preserving Phase 0 skeleton schemas.
 """
 
 from pathlib import Path
@@ -25,8 +27,25 @@ class LLMConfig(BaseModel):
 
 class Node(BaseModel):
     id: str
-    llm: LLMConfig
+    llm: LLMConfig | None = None
     tools: list[str] = []
+    handler: str | None = None
+
+    @model_validator(mode="after")
+    def _check_shape(self) -> "Node":
+        if self.llm is not None and self.handler is not None:
+            raise ValueError(
+                f"nodes[{self.id!r}]: sets both 'llm' and 'handler' - a node is either "
+                "LLM-backed ('llm') or custom-code ('handler'), not both"
+            )
+        if self.llm is None and self.handler is None:
+            raise ValueError(f"nodes[{self.id!r}]: sets neither 'llm' nor 'handler'")
+        if self.handler is not None and self.tools:
+            raise ValueError(
+                f"nodes[{self.id!r}]: 'tools' only applies to LLM-backed nodes, not "
+                "a 'handler' node - bind tools inside the handler function instead"
+            )
+        return self
 
 
 class Edge(BaseModel):
@@ -119,6 +138,8 @@ class Schema(BaseModel):
     @model_validator(mode="after")
     def _check_providers(self) -> "Schema":
         for node in self.nodes:
+            if node.llm is None:
+                continue
             if node.llm.provider not in _SUPPORTED_PROVIDERS:
                 supported = ", ".join(sorted(_SUPPORTED_PROVIDERS))
                 raise ValueError(

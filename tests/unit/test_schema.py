@@ -153,3 +153,52 @@ def test_rejects_conditional_edge_alongside_another_edge_from_same_source() -> N
                 ]
             )
         )
+
+
+def test_parses_handler_node() -> None:
+    schema = Schema.model_validate(
+        {
+            "schema_version": 1,
+            "nodes": [{"id": "shout", "handler": "tests.support.handlers:uppercase_last_message"}],
+        }
+    )
+
+    assert schema.nodes[0].llm is None
+    assert schema.nodes[0].handler == "tests.support.handlers:uppercase_last_message"
+
+
+def test_rejects_node_with_both_llm_and_handler() -> None:
+    with pytest.raises(ValidationError, match="sets both 'llm' and 'handler'"):
+        Schema.model_validate(
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {
+                        "id": "chat",
+                        "llm": {"provider": "anthropic", "model": "x"},
+                        "handler": "tests.support.handlers:uppercase_last_message",
+                    }
+                ],
+            }
+        )
+
+
+def test_rejects_node_with_neither_llm_nor_handler() -> None:
+    with pytest.raises(ValidationError, match="sets neither 'llm' nor 'handler'"):
+        Schema.model_validate({"schema_version": 1, "nodes": [{"id": "chat"}]})
+
+
+def test_rejects_tools_on_handler_node() -> None:
+    with pytest.raises(ValidationError, match="'tools' only applies to LLM-backed nodes"):
+        Schema.model_validate(
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {
+                        "id": "shout",
+                        "handler": "tests.support.handlers:uppercase_last_message",
+                        "tools": ["tests.support.tools:echo"],
+                    }
+                ],
+            }
+        )

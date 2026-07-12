@@ -249,3 +249,49 @@ def test_conditional_edge_with_unresolvable_condition_raises_compile_error(
 
     with pytest.raises(CompileError, match="edges\\['router'\\].condition"):
         compile_schema(schema)
+
+
+def test_handler_node_runs_the_referenced_callable_directly() -> None:
+    schema = Schema(
+        schema_version=1,
+        nodes=[Node(id="shout", handler="tests.support.handlers:uppercase_last_message")],
+    )
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="hello")]})
+
+    assert result["messages"][-1].content == "HELLO"
+
+
+def test_handler_node_with_unresolvable_handler_raises_compile_error() -> None:
+    schema = Schema(
+        schema_version=1,
+        nodes=[Node(id="shout", handler="no.such.module:thing")],
+    )
+
+    with pytest.raises(CompileError, match="nodes\\['shout'\\].handler"):
+        compile_schema(schema)
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_handler_node_mixed_with_llm_nodes(mock_init_chat_model: MagicMock) -> None:
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = AIMessage(content="hi")
+    mock_init_chat_model.return_value = mock_llm
+    schema = Schema(
+        schema_version=1,
+        nodes=[
+            Node(id="chat", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(id="shout", handler="tests.support.handlers:uppercase_last_message"),
+        ],
+        edges=[
+            Edge(from_="START", to="chat"),
+            Edge(from_="chat", to="shout"),
+            Edge(from_="shout", to="END"),
+        ],
+    )
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="hello")]})
+
+    assert result["messages"][-1].content == "HI"

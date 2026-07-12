@@ -2,9 +2,11 @@
 
 Phase 1 scope: multiple nodes wired by explicit `edges` (FR-1.1); per-node tool
 bindings compiled to LangGraph's own `ToolNode`/`tools_condition` primitives
-(FR-1.4); and conditional edges, whose routing function is a custom-code
-handler reference resolved at compile time (FR-1.5, `ADR-004`). A schema with
-one node and no edges compiles to the Phase 0 straight line START -> node -> END.
+(FR-1.4); conditional edges, whose routing function is a custom-code
+reference resolved at compile time (FR-1.5, `ADR-004`); and custom-code nodes,
+whose `handler` reference replaces `llm` as the node's entire LangGraph node
+function (FR-1.6, FR-2.2, `ADR-004`). A schema with one node and no edges
+compiles to the Phase 0 straight line START -> node -> END.
 """
 
 from collections import defaultdict
@@ -55,6 +57,7 @@ def _resolve_handler(ref: str, *, context: str) -> Any:
 
 
 def _make_llm_node(node: Node, llm: Any) -> Callable[[AgentState], AgentState]:
+    assert node.llm is not None  # enforced by Schema validation
     system = node.llm.system
 
     def run_node(state: AgentState) -> AgentState:
@@ -73,7 +76,13 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
     tool_node_names: dict[str, str] = {}
 
     for node in schema.nodes:
+        if node.handler is not None:
+            handler_fn = _resolve_handler(node.handler, context=f"nodes[{node.id!r}].handler")
+            graph.add_node(node.id, handler_fn)
+            continue
+
         tools = _resolve_tools(node)
+        assert node.llm is not None  # enforced by Schema validation
         llm: Any = init_chat_model(node.llm.model, model_provider=node.llm.provider)
         if tools:
             llm = llm.bind_tools(tools)
