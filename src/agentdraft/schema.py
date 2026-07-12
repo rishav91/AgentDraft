@@ -26,6 +26,7 @@ class LLMConfig(BaseModel):
 class Node(BaseModel):
     id: str
     llm: LLMConfig
+    tools: list[str] = []
 
 
 class Edge(BaseModel):

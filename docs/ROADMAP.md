@@ -61,7 +61,7 @@ signal on the project's central risk - see Sequencing rationale below.
 - [x] 1.2 - Field-level validation errors (missing fields, dangling edge references, unrecognized
   providers) and the `agentdraft validate` command (`FR-1.2`, remainder of `FR-1.3`, `FR-3.1`,
   `NFR-2.1`).
-- [ ] 1.3 - Tool bindings: a node's bound tools compile so the LLM can invoke them via LangGraph's
+- [x] 1.3 - Tool bindings: a node's bound tools compile so the LLM can invoke them via LangGraph's
   native tool-calling mechanism (`FR-1.4`).
 - [ ] 1.4 - Conditional/branching edges compile to a LangGraph conditional edge with matching
   routing behavior (`FR-1.5`).

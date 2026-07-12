@@ -1,8 +1,9 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from agentdraft.compiler import compile_schema
+from agentdraft.compiler import CompileError, compile_schema
 from agentdraft.schema import Edge, LLMConfig, Node, Schema
 
 
@@ -89,3 +90,75 @@ def test_run_node_without_system_message(mock_init_chat_model: MagicMock) -> Non
     sent_messages = mock_llm.invoke.call_args.args[0]
     assert len(sent_messages) == 1
     assert sent_messages[0].content == "hello"
+
+
+def _make_tool_schema() -> Schema:
+    return Schema(
+        schema_version=1,
+        nodes=[
+            Node(
+                id="chat",
+                llm=LLMConfig(provider="anthropic", model="claude-sonnet-5"),
+                tools=["tests.support.tools:echo"],
+            )
+        ],
+    )
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_compile_schema_wires_tool_node_and_loop_edge(mock_init_chat_model: MagicMock) -> None:
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value = mock_llm
+    mock_init_chat_model.return_value = mock_llm
+    schema = _make_tool_schema()
+
+    graph = compile_schema(schema)
+
+    node_names = set(graph.get_graph().nodes) - {"__start__", "__end__"}
+    assert node_names == {"chat", "chat__tools"}
+    edges = {(edge.source, edge.target) for edge in graph.get_graph().edges}
+    assert ("chat__tools", "chat") in edges
+    mock_llm.bind_tools.assert_called_once()
+    (bound_tools,), _ = mock_llm.bind_tools.call_args
+    assert [t.name for t in bound_tools] == ["echo"]
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_run_loops_through_tool_call_then_answers(mock_init_chat_model: MagicMock) -> None:
+    mock_llm = MagicMock()
+    mock_llm.bind_tools.return_value = mock_llm
+    mock_llm.invoke.side_effect = [
+        AIMessage(
+            content="",
+            tool_calls=[{"name": "echo", "args": {"text": "hi"}, "id": "call_1"}],
+        ),
+        AIMessage(content="done"),
+    ]
+    mock_init_chat_model.return_value = mock_llm
+    schema = _make_tool_schema()
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="please echo hi")]})
+
+    assert result["messages"][-1].content == "done"
+    tool_messages = [m for m in result["messages"] if m.type == "tool"]
+    assert tool_messages[0].content == "hi"
+    assert mock_llm.invoke.call_count == 2
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_unresolvable_tool_reference_raises_compile_error(mock_init_chat_model: MagicMock) -> None:
+    mock_init_chat_model.return_value = MagicMock()
+    schema = Schema(
+        schema_version=1,
+        nodes=[
+            Node(
+                id="chat",
+                llm=LLMConfig(provider="anthropic", model="claude-sonnet-5"),
+                tools=["no.such.module:thing"],
+            )
+        ],
+    )
+
+    with pytest.raises(CompileError, match="nodes\\['chat'\\].tools"):
+        compile_schema(schema)
