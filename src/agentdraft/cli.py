@@ -5,13 +5,14 @@ Exit codes (FR-3.4, ARCHITECTURE §4.4): 0 success, 1 validation error,
 2 compile error, 3 runtime/execution error.
 """
 
+import json
 import traceback
 
 import click
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
-from agentdraft.compiler import CompileError, compile_schema, explain_schema
+from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
 from agentdraft.schema import Schema, load_schema
 
 
@@ -69,11 +70,23 @@ def run(schema_path: str, message: str) -> None:
 
 @main.command()
 @click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
-def explain(schema_path: str) -> None:
-    """Print SCHEMA_PATH's compiled structure as text, without executing it."""
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format: human-readable text (default), or machine-readable JSON (FR-3.5), "
+    "the data source for the canvas (ADR-007).",
+)
+def explain(schema_path: str, output_format: str) -> None:
+    """Print SCHEMA_PATH's compiled structure, without executing it."""
     schema = _load_schema_or_exit(schema_path)
     try:
-        click.echo(explain_schema(schema))
+        if output_format == "json":
+            compile_schema(schema)
+            click.echo(json.dumps(schema_structure(schema), indent=2))
+        else:
+            click.echo(explain_schema(schema))
     except CompileError as exc:
         click.echo(f"error: {exc}", err=True)
         raise SystemExit(2) from None

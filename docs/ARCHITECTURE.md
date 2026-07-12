@@ -42,10 +42,11 @@ tool invocation, LLM calls — is LangGraph, called directly, per the governing 
 | Schema parser | Load and structurally validate a YAML schema file, including its `schema_version` (`FR-1.10`, `ADR-006`) | Python, `pydantic` (or equivalent schema library) | Reads a file path, returns a typed schema object or a validation error |
 | Compiler | Translate a validated schema object — including provider-agnostic LLM config (`ADR-005`) — into a LangGraph `StateGraph` | Python, `langgraph`, `langchain` (for `init_chat_model`) | Takes a schema object, returns a compiled `StateGraph` |
 | Custom-code loader | Resolve a schema's `handler: module:function` references to real Python callables (`FR-1.6`) | Python `importlib` | Takes an import-path string, returns a callable; raises a clear error if unresolvable |
-| CLI | User-facing entry point: `validate`, `run`, `explain` | Python, `click` or `argparse` | Reads schema file paths and flags from argv; prints to stdout/stderr |
+| CLI | User-facing entry point: `validate`, `run`, `explain` (text or JSON, `FR-3.5`) | Python, `click` or `argparse` | Reads schema file paths and flags from argv; prints to stdout/stderr |
+| Canvas frontend (Phase 2.1) | Read-only rendering of a compiled schema's structure (`FR-4.1`) | TypeScript, React, Vite, React Flow (`@xyflow/react`), `dagre` (`ADR-007`) | Loads a `FR-3.5` JSON export client-side (no backend process); no interface to the Python compiler beyond that file |
 
-No canvas, no meta-agent, no backend adapter layer exists in Phase 1 — see [ROADMAP](ROADMAP.md)
-for when each is introduced.
+No meta-agent, no backend adapter layer, no canvas editing exists yet — see
+[ROADMAP](ROADMAP.md) for when each is introduced.
 
 ## 4. Key flows
 
@@ -78,6 +79,16 @@ can branch on failure class without parsing error text:
 | `1` | Validation error (malformed schema, unresolved reference, unrecognized `schema_version` or provider) | `validate`, `run`, `explain` |
 | `2` | Compile error (schema is structurally valid but fails to compile — e.g. an unresolvable `handler` reference) | `run`, `explain` |
 | `3` | Runtime/execution error (LangGraph itself raises during `run`, e.g. a tool call or LLM call fails) | `run` |
+
+### 4.5 `agentdraft explain <schema> --format json` + canvas (Phase 2.1)
+1. Parser + compiler run as in `explain`; execution is skipped.
+2. `schema_structure()` builds one structured representation of the graph (nodes, edges, routing,
+   tool bindings) — the single source of truth both `explain`'s text rendering and this JSON
+   output read from, so the two cannot diverge (`FR-3.5`, `ADR-007`).
+3. The JSON is written to stdout (or redirected to a file by the user).
+4. The canvas frontend (`canvas/`, run separately via `npm run dev`) loads that JSON file
+   client-side and renders it read-only with React Flow — no backend process, no interface back
+   to the Python compiler beyond the file itself (`FR-4.1`, `ADR-007`).
 
 ## 5. Multi-tenancy & isolation
 

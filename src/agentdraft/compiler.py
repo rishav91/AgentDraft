@@ -143,6 +143,70 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
     return graph.compile()
 
 
+def schema_structure(schema: Schema) -> dict[str, Any]:
+    """Structured representation of a schema's compiled graph (FR-3.5).
+
+    Single source of truth for both `explain_schema`'s text rendering and the
+    `explain --format json` export the canvas consumes (`ADR-007`) - both read
+    this same structure, so they cannot diverge (ROADMAP Phase 2.1 exit
+    criterion). Does not itself compile the schema; callers that need
+    compile-time errors surfaced should call `compile_schema` first.
+    """
+    nodes: list[dict[str, Any]] = []
+    for node in schema.nodes:
+        if node.handler is not None:
+            nodes.append(
+                {
+                    "id": node.id,
+                    "kind": "handler",
+                    "llm": None,
+                    "handler": node.handler,
+                    "tools": [],
+                }
+            )
+        else:
+            assert node.llm is not None  # enforced by Schema validation
+            nodes.append(
+                {
+                    "id": node.id,
+                    "kind": "llm",
+                    "llm": {
+                        "provider": node.llm.provider,
+                        "model": node.llm.model,
+                        "system": node.llm.system,
+                    },
+                    "handler": None,
+                    "tools": list(node.tools),
+                }
+            )
+
+    edges: list[dict[str, Any]] = []
+    def _direct(source: str, target: str) -> dict[str, Any]:
+        return {"from": source, "kind": "direct", "to": target, "condition": None, "routes": None}
+
+    if not schema.edges:
+        only_node = schema.nodes[0]
+        edges.append(_direct("START", only_node.id))
+        edges.append(_direct(only_node.id, "END"))
+    else:
+        for edge in schema.edges:
+            if edge.condition is not None:
+                edges.append(
+                    {
+                        "from": edge.from_,
+                        "kind": "conditional",
+                        "to": None,
+                        "condition": edge.condition,
+                        "routes": dict(edge.routes or {}),
+                    }
+                )
+            else:
+                assert edge.to is not None  # enforced by Schema validation
+                edges.append(_direct(edge.from_, edge.to))
+
+    return {"schema_version": schema.schema_version, "nodes": nodes, "edges": edges}
+
+
 def explain_schema(schema: Schema) -> str:
     """Render a schema's compiled structure as text, without executing it (FR-3.3).
 
@@ -151,30 +215,25 @@ def explain_schema(schema: Schema) -> str:
     call happens either way, since compiling only constructs client objects.
     """
     compile_schema(schema)
+    structure = schema_structure(schema)
 
-    lines = [f"schema_version: {schema.schema_version}", "", "nodes:"]
-    for node in schema.nodes:
-        if node.handler is not None:
-            lines.append(f"  - {node.id} (handler: {node.handler})")
+    lines = [f"schema_version: {structure['schema_version']}", "", "nodes:"]
+    for node in structure["nodes"]:
+        if node["kind"] == "handler":
+            lines.append(f"  - {node['id']} (handler: {node['handler']})")
         else:
-            assert node.llm is not None  # enforced by Schema validation
-            lines.append(f"  - {node.id} (llm: {node.llm.provider}/{node.llm.model})")
-            if node.tools:
-                lines.append(f"      tools: {', '.join(node.tools)}")
+            llm = node["llm"]
+            lines.append(f"  - {node['id']} (llm: {llm['provider']}/{llm['model']})")
+            if node["tools"]:
+                lines.append(f"      tools: {', '.join(node['tools'])}")
 
     lines.append("")
     lines.append("edges:")
-    if not schema.edges:
-        only_node = schema.nodes[0]
-        lines.append(f"  - START -> {only_node.id}")
-        lines.append(f"  - {only_node.id} -> END")
-    else:
-        for edge in schema.edges:
-            if edge.condition is not None:
-                route_items = (edge.routes or {}).items()
-                routes = ", ".join(f"{key} -> {target}" for key, target in route_items)
-                lines.append(f"  - {edge.from_} -[{edge.condition}]-> {{{routes}}}")
-            else:
-                lines.append(f"  - {edge.from_} -> {edge.to}")
+    for edge in structure["edges"]:
+        if edge["kind"] == "conditional":
+            routes = ", ".join(f"{key} -> {target}" for key, target in edge["routes"].items())
+            lines.append(f"  - {edge['from']} -[{edge['condition']}]-> {{{routes}}}")
+        else:
+            lines.append(f"  - {edge['from']} -> {edge['to']}")
 
     return "\n".join(lines)

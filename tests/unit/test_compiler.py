@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from agentdraft.compiler import CompileError, compile_schema
+from agentdraft.compiler import CompileError, compile_schema, schema_structure
 from agentdraft.schema import Edge, LLMConfig, Node, Schema
 
 
@@ -338,3 +338,65 @@ def test_tool_bound_node_with_conditional_edge_raises_compile_error(
 
     with pytest.raises(CompileError, match="'chat'.*exactly one direct"):
         compile_schema(schema)
+
+
+def test_schema_structure_synthesizes_start_end_for_implicit_single_node() -> None:
+    schema = _make_schema(system="be terse")
+
+    structure = schema_structure(schema)
+
+    assert structure["nodes"] == [
+        {
+            "id": "chat",
+            "kind": "llm",
+            "llm": {"provider": "anthropic", "model": "claude-sonnet-5", "system": "be terse"},
+            "handler": None,
+            "tools": [],
+        }
+    ]
+    assert structure["edges"] == [
+        {"from": "START", "kind": "direct", "to": "chat", "condition": None, "routes": None},
+        {"from": "chat", "kind": "direct", "to": "END", "condition": None, "routes": None},
+    ]
+
+
+def test_schema_structure_covers_tools_handler_and_conditional_routing() -> None:
+    schema = Schema(
+        schema_version=1,
+        nodes=[
+            Node(id="router", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(
+                id="search",
+                llm=LLMConfig(provider="anthropic", model="claude-sonnet-5"),
+                tools=["tests.support.tools:echo"],
+            ),
+            Node(id="shout", handler="tests.support.handlers:uppercase_last_message"),
+        ],
+        edges=[
+            Edge(from_="START", to="router"),
+            Edge(
+                from_="router",
+                condition="tests.support.routing:by_last_message_content",
+                routes={"positive": "search", "negative": "shout"},
+            ),
+            Edge(from_="search", to="shout"),
+            Edge(from_="shout", to="END"),
+        ],
+    )
+
+    structure = schema_structure(schema)
+
+    assert structure["schema_version"] == 1
+    node_by_id = {node["id"]: node for node in structure["nodes"]}
+    assert node_by_id["search"]["tools"] == ["tests.support.tools:echo"]
+    assert node_by_id["shout"] == {
+        "id": "shout",
+        "kind": "handler",
+        "llm": None,
+        "handler": "tests.support.handlers:uppercase_last_message",
+        "tools": [],
+    }
+    conditional = next(edge for edge in structure["edges"] if edge["kind"] == "conditional")
+    assert conditional["from"] == "router"
+    assert conditional["condition"] == "tests.support.routing:by_last_message_content"
+    assert conditional["routes"] == {"positive": "search", "negative": "shout"}

@@ -1,4 +1,4 @@
-# System Requirements — AgentDraft (Phase 1)
+# System Requirements — AgentDraft
 
 See [README](../README.md) for the doc map. Scope matches [PRD §5](../PRD.md#5-scope--governing-rule)
 and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append, don't renumber.
@@ -38,6 +38,13 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-3.2 | `agentdraft run <schema>` compiles and executes a schema | P0 | Runs the compiled graph via LangGraph's execution; streams output to stdout; exits non-zero on compile or runtime failure |
 | FR-3.3 | `agentdraft explain <schema>` prints the compiled graph's structure as text, without executing | P0 | Output lists nodes, edges, routing conditions, and tool bindings; no LLM/tool calls are made |
 | FR-3.4 | CLI commands use a stable, documented exit-code taxonomy | P0 | `0` success, `1` validation error, `2` compile error, `3` runtime/execution error ([ARCHITECTURE §4.4](../ARCHITECTURE.md#44-exit-codes)); every failure path in `validate`/`run`/`explain` exits with the correct code, asserted directly in e2e tests (`NFR-6.2`) |
+| FR-3.5 | `agentdraft explain <schema> --format json` prints the compiled graph's structure as machine-readable JSON, without executing | P0 | Same structure as `FR-3.3`'s text output (nodes, edges, routing conditions, tool bindings), rendered from the same underlying data (`schema_structure`) so text and JSON cannot diverge; this is the canvas's sole data source (`FR-4.1`, `ADR-007`) |
+
+### FR-4 — Canvas
+
+| ID | Requirement | Priority | Acceptance criteria |
+|---|---|---|---|
+| FR-4.1 | Read-only canvas renders a compiled schema's structure (nodes, edges, routing, tool bindings) | P0 | Loading a `FR-3.5` JSON export into the canvas renders every node and edge the schema expresses, with no divergence from what `agentdraft explain` prints for the same schema ([ROADMAP](../ROADMAP.md) Phase 2.1 exit criterion) |
 
 ## Non-functional requirements
 

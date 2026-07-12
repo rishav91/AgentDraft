@@ -13,6 +13,7 @@ Referenced by ID (`ADR-00N`) from other docs.
 | [ADR-004](#adr-004--custom-code-escape-hatch) | Custom-code escape hatch for undeclarable logic | Accepted |
 | [ADR-005](#adr-005--llm-provider-agnostic-config) | LLM provider-agnostic config | Accepted |
 | [ADR-006](#adr-006--schema-versioning) | Schema versioning | Accepted |
+| [ADR-007](#adr-007--canvas-frontend-stack-and-data-interface) | Canvas frontend stack and data interface | Accepted |
 
 ---
 
@@ -190,3 +191,54 @@ of the AgentDraft schema format it targets (`FR-1.10`). Phase 1 ships as `schema
   consumer (clear-error validation, `FR-1.10`), migration tooling does not yet and isn't built.
 - `−` One more required field in every schema file, including trivial ones — a small, permanent
   authoring cost accepted in exchange for avoiding silent breakage later.
+
+---
+
+## ADR-007 — Canvas frontend stack and data interface
+
+**Context.** Phase 2 (canvas) requires rendering (2.1) and, later, editing (2.2) a compiled
+schema's structure. `ADR-002` flagged but deferred this exact boundary: "if the canvas is a
+web/Electron frontend, it will need its own language (likely TypeScript) and a defined interface
+to the Python compiler/CLI (e.g. shelling out, or a local API)." [ROADMAP](ROADMAP.md) left the
+canvas's framework and test-tooling explicitly "TBD when Phase 2 scope is planned." This ADR
+resolves that deferred boundary now that Phase 2 planning has started, scoped to what sub-phase
+2.1 (read-only rendering) needs.
+
+**Decision.**
+- **Frontend:** a local web app, not Electron, built with React + TypeScript + Vite.
+- **Data interface:** a static JSON export of the compiled graph structure — no running backend
+  process. `agentdraft explain <schema> --format json` (`FR-3.5`) is the canvas's sole data
+  source; the canvas loads a JSON file client-side (browser File API), with no HTTP API and no
+  live process talking to the Python compiler.
+- **Graph rendering:** React Flow (`@xyflow/react`) for node/edge rendering, pan/zoom, and layout
+  primitives, with `dagre` for automatic layout (the schema itself carries no position data).
+
+**Alternatives.**
+- **Electron.** Rejected for 2.1: a native desktop shell adds packaging/build/auto-update
+  machinery disproportionate to a single-user, read-only viewer — nothing about read-only
+  rendering needs OS-level integration. Revisit if/when 2.2 (editing) or distribution to other
+  authors ([PRD §3](PRD.md#3-personas)) makes a standalone app worth the packaging cost.
+- **A local HTTP API serving compiled-graph JSON on demand.** Rejected for 2.1: introduces a
+  long-running backend process (lifecycle, port management, CORS) for a sub-phase whose only
+  requirement is rendering an already-compiled, static structure. A static export is the literal
+  shape of the 2.1 exit criterion ([ROADMAP](ROADMAP.md)) — "no divergence between what `explain`
+  prints and what the canvas shows" is satisfied by the same data feeding two renderers, with no
+  live channel between them to keep in sync. Revisit for 2.2, which needs a write path back to
+  the schema file and may justify a local server then.
+- **Custom SVG/Canvas rendering instead of React Flow.** Rejected: reimplements pan/zoom/layout
+  that React Flow already provides, for no concrete benefit at this stage; React Flow has a clear
+  upgrade path to 2.2 editing (drag, connect, select) for free.
+
+**Consequences.**
+- `+` Zero new backend process/lifecycle to build or reason about for 2.1 — the CLI already
+  produces the JSON (`FR-3.5`), the canvas already just reads a file.
+- `+` `schema_structure()` (the Python function backing both `explain`'s text output and
+  `--format json`) is the single source of truth for graph structure, so the "no divergence"
+  exit criterion holds by construction, not by discipline.
+- `+` React Flow gives 2.2 (editing) a natural extension point — the same node/edge model, now
+  mutable — instead of a rewrite.
+- `−` No live connection between the running compiler and the canvas: editing (2.2) will need its
+  own interface decision (e.g. writing schema YAML back to disk, possibly via a local server then)
+  — explicitly deferred, not solved here.
+- `−` Two runtimes (Python and Node/TypeScript) now exist in the repo, each with its own
+  dependency and build tooling — the anticipated cost `ADR-002` accepted in advance.

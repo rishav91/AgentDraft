@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "nodes": [
+    {
+      "id": "router",
+      "kind": "llm",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "system": "Decide whether the user wants to search or just chat."
+      },
+      "handler": null,
+      "tools": []
+    },
+    {
+      "id": "search",
+      "kind": "llm",
+      "llm": {
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "system": "Answer using the echo tool when asked to echo something."
+      },
+      "handler": null,
+      "tools": [
+        "tests.support.tools:echo"
+      ]
+    },
+    {
+      "id": "shout",
+      "kind": "handler",
+      "llm": null,
+      "handler": "tests.support.handlers:uppercase_last_message",
+      "tools": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "START",
+      "kind": "direct",
+      "to": "router",
+      "condition": null,
+      "routes": null
+    },
+    {
+      "from": "router",
+      "kind": "conditional",
+      "to": null,
+      "condition": "tests.support.routing:by_last_message_content",
+      "routes": {
+        "positive": "search",
+        "negative": "shout"
+      }
+    },
+    {
+      "from": "search",
+      "kind": "direct",
+      "to": "shout",
+      "condition": null,
+      "routes": null
+    },
+    {
+      "from": "shout",
+      "kind": "direct",
+      "to": "END",
+      "condition": null,
+      "routes": null
+    }
+  ]
+}
