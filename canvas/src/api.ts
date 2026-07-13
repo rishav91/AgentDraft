@@ -101,3 +101,52 @@ export async function fetchCallableSource(apiBase: string, ref: string): Promise
     return null;
   }
 }
+
+export type SchemaEntry = { path: string; valid: boolean; node_count: number | null };
+export type SchemasResult = { active: string | null; schemas: SchemaEntry[] };
+
+// Best-effort, same convention as fetchCallables/fetchProviders (FR-4.7) - an
+// empty result just means the sidebar has nothing to show, not a broken editor.
+export async function fetchSchemas(apiBase: string): Promise<SchemasResult> {
+  try {
+    const response = await fetch(`${apiBase}/api/schemas`);
+    if (!response.ok) return { active: null, schemas: [] };
+    const data: unknown = await response.json();
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      typeof (data as Record<string, unknown>).active === "string" &&
+      Array.isArray((data as Record<string, unknown>).schemas)
+    ) {
+      const typed = data as { active: string; schemas: SchemaEntry[] };
+      return { active: typed.active, schemas: typed.schemas };
+    }
+    return { active: null, schemas: [] };
+  } catch {
+    return { active: null, schemas: [] };
+  }
+}
+
+export type OpenResult = { ok: true; structure: GraphStructure } | { ok: false; errors: string[] };
+
+// Unlike fetchSchemas, switching the active file is a critical operation
+// (FR-4.7) - failures surface as field-specific errors, same convention as
+// saveGraph, rather than silently degrading.
+export async function openSchema(apiBase: string, path: string): Promise<OpenResult> {
+  const response = await fetch(`${apiBase}/api/open`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!response.ok) {
+    return { ok: false, errors: await readErrors(response) };
+  }
+  const data: unknown = await response.json();
+  if (!isGraphStructure(data)) {
+    return {
+      ok: false,
+      errors: ["agentdraft canvas API returned an unexpected shape for /api/open"],
+    };
+  }
+  return { ok: true, structure: data };
+}

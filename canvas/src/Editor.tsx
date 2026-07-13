@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { Connection } from "@xyflow/react";
 
-import { fetchCallables, fetchProviders, saveGraph } from "./api";
+import { fetchCallables, fetchProviders, fetchSchemas, openSchema, saveGraph } from "./api";
+import type { SchemaEntry } from "./api";
 import {
   addDirectTarget,
   addNode,
@@ -13,6 +14,7 @@ import {
 } from "./editorActions";
 import { GraphCanvas } from "./GraphCanvas";
 import { Inspector } from "./Inspector";
+import { SchemaSidebar } from "./SchemaSidebar";
 import type { GraphNode, GraphStructure } from "./types";
 
 type EditorProps = {
@@ -29,11 +31,21 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
   const [saving, setSaving] = useState(false);
   const [callables, setCallables] = useState<string[]>([]);
   const [providers, setProviders] = useState<string[]>([]);
+  const [schemas, setSchemas] = useState<SchemaEntry[]>([]);
+  const [activePath, setActivePath] = useState<string | null>(null);
+
+  const refreshSchemas = useCallback(() => {
+    fetchSchemas(apiBase).then(({ active, schemas: list }) => {
+      setSchemas(list);
+      setActivePath(active);
+    });
+  }, [apiBase]);
 
   useEffect(() => {
     fetchCallables(apiBase).then(setCallables);
     fetchProviders(apiBase).then(setProviders);
-  }, [apiBase]);
+    refreshSchemas();
+  }, [apiBase, refreshSchemas]);
 
   const mutate = (next: GraphStructure) => {
     setStructure(next);
@@ -93,6 +105,22 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
       setDirty(false);
       setSaveErrors(null);
       setNotice("Saved.");
+      refreshSchemas();
+    } else {
+      setSaveErrors(result.errors);
+    }
+  };
+
+  const handleSwitchSchema = async (path: string) => {
+    setNotice(null);
+    setSaveErrors(null);
+    const result = await openSchema(apiBase, path);
+    if (result.ok) {
+      setStructure(result.structure);
+      setDirty(false);
+      setSelectedNodeId(null);
+      setActivePath(path);
+      refreshSchemas();
     } else {
       setSaveErrors(result.errors);
     }
@@ -101,6 +129,7 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
   return (
     <div className="editor">
       <div className="editor__toolbar">
+        {activePath && <span className="editor__active-path">{activePath}</span>}
         <span>schema_version: {structure.schema_version}</span>
         <button type="button" onClick={handleAddNode}>
           + Add node
@@ -119,6 +148,12 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
         </div>
       )}
       <div className="editor__body">
+        <SchemaSidebar
+          schemas={schemas}
+          activePath={activePath}
+          disabled={dirty}
+          onSelect={(path) => void handleSwitchSchema(path)}
+        />
         <div className="editor__canvas">
           <GraphCanvas
             structure={structure}

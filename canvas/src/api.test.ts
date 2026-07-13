@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCallableSource, fetchCallables, fetchProviders } from "./api";
+import { fetchCallableSource, fetchCallables, fetchProviders, fetchSchemas, openSchema } from "./api";
 
 function mockFetch(response: Partial<Response> & { json?: () => Promise<unknown> }) {
   vi.stubGlobal(
@@ -94,5 +94,87 @@ describe("fetchCallableSource", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
     expect(await fetchCallableSource("http://api", "mod:f")).toBeNull();
+  });
+});
+
+describe("fetchSchemas", () => {
+  it("returns the active path and schema list on success", async () => {
+    mockFetch({
+      json: () =>
+        Promise.resolve({
+          active: "schema.yaml",
+          schemas: [{ path: "schema.yaml", valid: true, node_count: 2 }],
+        }),
+    });
+
+    expect(await fetchSchemas("http://api")).toEqual({
+      active: "schema.yaml",
+      schemas: [{ path: "schema.yaml", valid: true, node_count: 2 }],
+    });
+  });
+
+  it("returns an empty result on a non-ok response", async () => {
+    mockFetch({ ok: false, status: 500 });
+
+    expect(await fetchSchemas("http://api")).toEqual({ active: null, schemas: [] });
+  });
+
+  it("returns an empty result on an unexpected response shape", async () => {
+    mockFetch({ json: () => Promise.resolve({ nonsense: true }) });
+
+    expect(await fetchSchemas("http://api")).toEqual({ active: null, schemas: [] });
+  });
+
+  it("returns an empty result if the request throws", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    expect(await fetchSchemas("http://api")).toEqual({ active: null, schemas: [] });
+  });
+});
+
+describe("openSchema", () => {
+  it("returns the new structure on success", async () => {
+    mockFetch({
+      json: () => Promise.resolve({ schema_version: 1, nodes: [], edges: [] }),
+    });
+
+    const result = await openSchema("http://api", "other.yaml");
+
+    expect(result).toEqual({ ok: true, structure: { schema_version: 1, nodes: [], edges: [] } });
+  });
+
+  it("posts the path in the request body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ schema_version: 1, nodes: [], edges: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openSchema("http://api", "sub/other.yaml");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api/api/open",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ path: "sub/other.yaml" }),
+      }),
+    );
+  });
+
+  it("returns field-specific errors on a non-ok response", async () => {
+    mockFetch({ ok: false, status: 422, json: () => Promise.resolve({ errors: ["bad schema"] }) });
+
+    expect(await openSchema("http://api", "bad.yaml")).toEqual({
+      ok: false,
+      errors: ["bad schema"],
+    });
+  });
+
+  it("returns an error on an unexpected response shape", async () => {
+    mockFetch({ json: () => Promise.resolve({ nonsense: true }) });
+
+    const result = await openSchema("http://api", "other.yaml");
+
+    expect(result.ok).toBe(false);
   });
 });
