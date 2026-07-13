@@ -23,6 +23,13 @@ _EXCLUDED_DIR_NAMES = {
     "build",
 }
 
+# Resolved via this module's own __file__ - the actual installed location,
+# whether an editable dev install (this repo's src/agentdraft) or a normal
+# site-packages one - not a hardcoded path string. AgentDraft's own source
+# should never show up as a suggested handler/condition/tool reference just
+# because `agentdraft canvas` happens to be run from inside this repo.
+_AGENTDRAFT_PACKAGE_DIR = Path(__file__).resolve().parent
+
 
 def _module_path(py_file: Path, root: Path) -> str | None:
     parts = list(py_file.relative_to(root).parts)
@@ -73,6 +80,8 @@ def discover_callables(root: Path) -> list[str]:
     for py_file in root.rglob("*.py"):
         rel_parts = py_file.relative_to(root).parts
         if any(part in _EXCLUDED_DIR_NAMES or part.startswith(".") for part in rel_parts[:-1]):
+            continue
+        if py_file.resolve().is_relative_to(_AGENTDRAFT_PACKAGE_DIR):
             continue
 
         module_path = _module_path(py_file, root)

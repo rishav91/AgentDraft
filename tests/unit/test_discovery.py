@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from agentdraft import discovery
 from agentdraft.discovery import discover_callables, get_callable_source
 
 
@@ -64,6 +67,17 @@ def test_skips_non_function_top_level_statements(tmp_path: Path) -> None:
     _write(tmp_path, "mod.py", "class Thing:\n    pass\n\nX = 1\n\ndef visible(): pass\n")
 
     assert discover_callables(tmp_path) == ["mod:visible"]
+
+
+def test_excludes_agentdrafts_own_package_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package_dir = tmp_path / "project" / "vendored" / "agentdraft"
+    _write(tmp_path, "project/vendored/agentdraft/compiler.py", "def schema_structure(): pass\n")
+    _write(tmp_path, "project/handlers.py", "def my_handler(state): return state\n")
+    monkeypatch.setattr(discovery, "_AGENTDRAFT_PACKAGE_DIR", package_dir)
+
+    assert discover_callables(tmp_path / "project") == ["handlers:my_handler"]
 
 
 def test_results_are_sorted(tmp_path: Path) -> None:
