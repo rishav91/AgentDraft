@@ -143,7 +143,7 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
   passthrough, `agentdraft run --resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`). Built first -
   establishes the shared local store (`ADR-010`) and the `thread_id` concept the later sub-phases
   correlate against.
-- [ ] 3.2 - Schema version history: every `save_schema` call recorded as a revision; `agentdraft
+- [x] 3.2 - Schema version history: every `save_schema` call recorded as a revision; `agentdraft
   schema log`/`diff` (`FR-9.1`-`FR-9.4`).
 - [ ] 3.3 - Run history: every `agentdraft run` recorded to the local ledger; `agentdraft runs
   list`/`show`/`prune` (`FR-6.1`-`FR-6.4`).
