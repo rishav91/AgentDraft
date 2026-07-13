@@ -1,0 +1,47 @@
+# A comprehensive OpenAI-backed example 
+# docs-search capability, plus a router node and a
+# custom-code handler node, so it exercises tool use, conditional routing,
+# and the handler escape hatch in one real, runnable graph. Uses a cheap
+# "mini" model for both LLM nodes.
+#
+# Needs a real OPENAI_API_KEY and `pip install -U langchain-openai`.
+#
+# Run it:
+#   agentdraft validate examples/openai_docs_qa.yaml
+#   agentdraft explain examples/openai_docs_qa.yaml
+#   agentdraft run examples/openai_docs_qa.yaml "What does the roadmap say about Phase 2?"
+#   agentdraft run examples/openai_docs_qa.yaml "hello!"
+schema_version: 1
+nodes:
+  - id: router
+    llm:
+      provider: openai
+      model: gpt-4o-mini
+      system: >
+        Classify the user's message. Reply with exactly one word: "docs" if
+        they're asking a question about the AgentDraft project or its docs,
+        or "chat" if it's just a greeting or small talk. No other text.
+  - id: search
+    llm:
+      provider: openai
+      model: gpt-4o-mini
+      system: >
+        You answer questions about the AgentDraft project using its own design
+        docs. Call search_docs to find relevant lines before answering, and
+        say you don't know if nothing relevant turns up rather than guessing.
+    tools:
+      - examples.tools:search_docs
+  - id: greet
+    handler: examples.handlers:friendly_greeting
+edges:
+  - from: START
+    to: router
+  - from: router
+    condition: examples.routing:by_router_verdict
+    routes:
+      docs: search
+      chat: greet
+  - from: search
+    to: END
+  - from: greet
+    to: END

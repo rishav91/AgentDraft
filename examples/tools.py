@@ -1,5 +1,5 @@
-"""A real tool for examples/docs_qa.yaml: search AgentDraft's own design
-docs for lines mentioning a query term.
+"""A real tool shared by examples/docs_qa.yaml and examples/openai_docs_qa.yaml:
+search AgentDraft's own design docs for lines mentioning a query term.
 """
 
 from pathlib import Path

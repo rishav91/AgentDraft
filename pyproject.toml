@@ -23,6 +23,10 @@ dev = [
     "mypy>=1.11,<2",
     "types-PyYAML",
 ]
+examples = [
+    "langchain-anthropic>=0.3,<0.4",
+    "langchain-openai>=0.3,<0.4",
+]
 
 [project.scripts]
 agentdraft = "agentdraft.cli:main"
