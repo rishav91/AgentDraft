@@ -1,0 +1,19 @@
+schema_version: 1
+nodes:
+  - id: greeter
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5
+  - id: closer
+    llm:
+      provider: anthropic
+      model: claude-sonnet-5
+edges:
+  - from: START
+    to: greeter
+  - from: greeter
+    to: closer
+  - from: closer
+    to: END
+checkpointer:
+  backend: sqlite

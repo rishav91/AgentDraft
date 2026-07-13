@@ -10,19 +10,24 @@ function (FR-1.6, FR-2.2, `ADR-004`). A schema with one node and no edges
 compiles to the Phase 0 straight line START -> node -> END.
 """
 
+import os
+import sqlite3
 from collections import defaultdict
 from collections.abc import Callable
 from typing import Annotated, Any, TypedDict
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import BaseMessage, SystemMessage
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from agentdraft.loader import HandlerResolutionError, resolve_reference
-from agentdraft.schema import Edge, Node, Schema
+from agentdraft.schema import Checkpointer, Edge, Node, Schema
+from agentdraft.store import ensure_local_store_dir
 
 _SENTINELS = {"START": START, "END": END}
 
@@ -117,8 +122,51 @@ def _make_capped_condition(
     return wrapped
 
 
+def _build_sqlite_checkpointer() -> SqliteSaver:
+    db_path = ensure_local_store_dir()
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    saver = SqliteSaver(conn)
+    saver.setup()
+    return saver
+
+
+def _build_postgres_checkpointer(checkpointer: Checkpointer) -> BaseCheckpointSaver[str]:
+    assert checkpointer.dsn_env is not None  # enforced by Checkpointer validation
+    dsn = os.environ.get(checkpointer.dsn_env)
+    if not dsn:
+        raise CompileError(
+            f"checkpointer: environment variable {checkpointer.dsn_env!r} (checkpointer.dsn_env) "
+            "is not set - it must hold a Postgres connection string"
+        )
+    try:
+        from langgraph.checkpoint.postgres import PostgresSaver
+        from psycopg import Connection
+        from psycopg.rows import dict_row
+    except ImportError as exc:
+        raise CompileError(
+            "checkpointer.backend: 'postgres' requires the optional postgres extra - "
+            "install with `pip install agentdraft[postgres]`"
+        ) from exc
+    conn = Connection.connect(dsn, autocommit=True, prepare_threshold=0, row_factory=dict_row)
+    saver = PostgresSaver(conn)
+    saver.setup()
+    return saver
+
+
+def build_checkpointer(checkpointer: Checkpointer | None) -> BaseCheckpointSaver[str] | None:
+    """Construct the LangGraph-native checkpointer a schema's `checkpointer` block asks for
+    (`FR-5.1`, `ADR-009`) - AgentDraft builds no checkpoint format of its own.
+    """
+    if checkpointer is None:
+        return None
+    if checkpointer.backend == "sqlite":
+        return _build_sqlite_checkpointer()
+    return _build_postgres_checkpointer(checkpointer)
+
+
 def compile_schema(schema: Schema) -> CompiledStateGraph:
     """Translate a validated schema into a compiled LangGraph StateGraph."""
+    checkpointer = build_checkpointer(schema.checkpointer)
     graph = StateGraph(AgentState)
     tool_node_names: dict[str, str] = {}
     # Nodes whose outgoing conditional edge caps its self-loop (FR-1.12) - only
@@ -162,7 +210,7 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
             )
         else:
             graph.add_edge(only_node.id, END)
-        return graph.compile()
+        return graph.compile(checkpointer=checkpointer)
 
     edges_by_source: dict[str, list[Edge]] = defaultdict(list)
     for edge in schema.edges:
@@ -200,7 +248,7 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
                 assert edge.to is not None  # enforced by Schema validation
                 graph.add_edge(_resolve(source), _resolve(edge.to))
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
 def schema_structure(schema: Schema) -> dict[str, Any]:

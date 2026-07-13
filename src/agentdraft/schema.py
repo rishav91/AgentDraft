@@ -8,7 +8,7 @@ START -> node -> END, preserving Phase 0 skeleton schemas.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from langchain.chat_models.base import _SUPPORTED_PROVIDERS
@@ -105,10 +105,34 @@ class Edge(BaseModel):
         return self
 
 
+class Checkpointer(BaseModel):
+    """Opt-in checkpointing config (`FR-5.1`, `ADR-009`) - a thin passthrough to
+    LangGraph's own `SqliteSaver`/`PostgresSaver`, not an AgentDraft-built abstraction.
+    """
+
+    backend: Literal["sqlite", "postgres"] = "sqlite"
+    dsn_env: str | None = None
+
+    @model_validator(mode="after")
+    def _check_dsn(self) -> "Checkpointer":
+        if self.backend == "postgres" and not self.dsn_env:
+            raise ValueError(
+                "checkpointer.dsn_env is required when backend is 'postgres' - name the "
+                "environment variable holding the connection string (never inline it)"
+            )
+        if self.backend == "sqlite" and self.dsn_env is not None:
+            raise ValueError(
+                "checkpointer.dsn_env is only valid when backend is 'postgres' - the sqlite "
+                "backend uses the shared local store (ADR-010) with no configuration"
+            )
+        return self
+
+
 class Schema(BaseModel):
     schema_version: int
     nodes: list[Node]
     edges: list[Edge] = []
+    checkpointer: Checkpointer | None = None
 
     @model_validator(mode="after")
     def _check_version(self) -> "Schema":
@@ -230,6 +254,12 @@ def dump_schema(schema: Schema) -> dict[str, Any]:
                     edge_entry["fallback"] = edge.fallback
             edges.append(edge_entry)
         result["edges"] = edges
+
+    if schema.checkpointer is not None:
+        checkpointer: dict[str, Any] = {"backend": schema.checkpointer.backend}
+        if schema.checkpointer.dsn_env is not None:
+            checkpointer["dsn_env"] = schema.checkpointer.dsn_env
+        result["checkpointer"] = checkpointer
 
     return result
 

@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from agentdraft.schema import (
     SUPPORTED_PROVIDERS,
+    Checkpointer,
     Schema,
     dump_schema,
     load_schema,
@@ -407,3 +408,59 @@ def test_rejects_tools_on_handler_node() -> None:
                 ],
             }
         )
+
+
+def _single_node_dict(checkpointer: dict[str, object] | None = None) -> dict[str, object]:
+    data: dict[str, object] = {
+        "schema_version": 1,
+        "nodes": [{"id": "chat", "llm": {"provider": "anthropic", "model": "claude-sonnet-5"}}],
+    }
+    if checkpointer is not None:
+        data["checkpointer"] = checkpointer
+    return data
+
+
+def test_schema_without_checkpointer_defaults_to_none() -> None:
+    schema = Schema.model_validate(_single_node_dict())
+
+    assert schema.checkpointer is None
+
+
+def test_checkpointer_defaults_to_sqlite_backend() -> None:
+    schema = Schema.model_validate(_single_node_dict({}))
+
+    assert schema.checkpointer == Checkpointer(backend="sqlite", dsn_env=None)
+
+
+def test_checkpointer_postgres_requires_dsn_env() -> None:
+    with pytest.raises(ValidationError, match="dsn_env is required when backend is 'postgres'"):
+        Schema.model_validate(_single_node_dict({"backend": "postgres"}))
+
+
+def test_checkpointer_sqlite_rejects_dsn_env() -> None:
+    with pytest.raises(ValidationError, match="dsn_env is only valid when backend is 'postgres'"):
+        Schema.model_validate(_single_node_dict({"backend": "sqlite", "dsn_env": "SOME_VAR"}))
+
+
+def test_dump_schema_omits_checkpointer_when_absent() -> None:
+    schema = Schema.model_validate(_single_node_dict())
+
+    assert "checkpointer" not in dump_schema(schema)
+
+
+def test_dump_schema_round_trips_checkpointer_sqlite() -> None:
+    schema = Schema.model_validate(_single_node_dict({"backend": "sqlite"}))
+
+    dumped = dump_schema(schema)
+
+    assert dumped["checkpointer"] == {"backend": "sqlite"}
+    assert Schema.model_validate(yaml.safe_load(schema_to_yaml(schema))) == schema
+
+
+def test_dump_schema_round_trips_checkpointer_postgres_dsn_env() -> None:
+    schema = Schema.model_validate(_single_node_dict({"backend": "postgres", "dsn_env": "PG_DSN"}))
+
+    dumped = dump_schema(schema)
+
+    assert dumped["checkpointer"] == {"backend": "postgres", "dsn_env": "PG_DSN"}
+    assert Schema.model_validate(yaml.safe_load(schema_to_yaml(schema))) == schema

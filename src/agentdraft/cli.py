@@ -7,10 +7,13 @@ Exit codes (FR-3.4, ARCHITECTURE §4.4): 0 success, 1 validation error,
 
 import json
 import traceback
+import uuid
 from pathlib import Path
 
 import click
 from dotenv import load_dotenv
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
@@ -58,13 +61,54 @@ def validate(schema_path: str) -> None:
 
 @main.command()
 @click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
-@click.argument("message")
-def run(schema_path: str, message: str) -> None:
-    """Compile SCHEMA_PATH and run it with an initial human MESSAGE."""
+@click.argument("message", required=False)
+@click.option(
+    "--resume",
+    "thread_id",
+    default=None,
+    metavar="THREAD_ID",
+    help="Resume an interrupted run by its thread_id (FR-5.3) instead of starting a new "
+    "one - requires the schema to declare a `checkpointer` block (FR-5.1).",
+)
+def run(schema_path: str, message: str | None, thread_id: str | None) -> None:
+    """Compile SCHEMA_PATH and run it with an initial human MESSAGE.
+
+    MESSAGE is required to start a new run; it's optional with --resume, where
+    omitting it just continues the graph from its last checkpoint with no new input.
+    """
+    is_resume = thread_id is not None
     schema = _load_schema_or_exit(schema_path)
     graph = _compile_or_exit(schema)
+
+    if is_resume and schema.checkpointer is None:
+        click.echo(
+            "error: --resume requires the schema to declare a `checkpointer` block (FR-5.5)",
+            err=True,
+        )
+        raise SystemExit(1)
+    if message is None and not is_resume:
+        click.echo("error: MESSAGE is required to start a new run", err=True)
+        raise SystemExit(1)
+
+    config: RunnableConfig | None = None
+    if schema.checkpointer is not None:
+        if is_resume:
+            saver = graph.checkpointer
+            assert isinstance(saver, BaseCheckpointSaver)  # schema.checkpointer set => a saver
+            if saver.get_tuple({"configurable": {"thread_id": thread_id}}) is None:
+                click.echo(f"error: no checkpoint found for thread_id {thread_id!r}", err=True)
+                raise SystemExit(1)
+        else:
+            thread_id = str(uuid.uuid4())
+            click.echo(
+                f"thread_id: {thread_id} (resume an interrupted run with: --resume {thread_id})"
+            )
+        config = {"configurable": {"thread_id": thread_id}}
+
+    input_ = {"messages": [("human", message)]} if message is not None else None
+
     try:
-        for chunk in graph.stream({"messages": [("human", message)]}):
+        for chunk in graph.stream(input_, config=config):
             for node_name, node_output in chunk.items():
                 for msg in node_output["messages"]:
                     click.echo(f"[{node_name}] {msg.content}")

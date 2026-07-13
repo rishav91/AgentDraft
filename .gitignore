@@ -7,6 +7,7 @@ __pycache__/
 *.egg-info/
 .lavish/
 .coverage
+.agentdraft/
 canvas/node_modules/
 canvas/dist/
 canvas/*.tsbuildinfo

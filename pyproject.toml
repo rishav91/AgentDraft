@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "langgraph>=0.2,<0.3",
     "langchain>=0.3,<0.4",
+    "langgraph-checkpoint-sqlite>=2,<3",
     "pydantic>=2,<3",
     "pyyaml>=6,<7",
     "click>=8,<9",
@@ -27,6 +28,10 @@ dev = [
 examples = [
     "langchain-anthropic>=0.3,<0.4",
     "langchain-openai>=0.3,<0.4",
+]
+postgres = [
+    "langgraph-checkpoint-postgres>=2,<3",
+    "psycopg[binary]>=3,<4",
 ]
 
 [project.scripts]
