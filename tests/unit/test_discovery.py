@@ -69,6 +69,52 @@ def test_skips_non_function_top_level_statements(tmp_path: Path) -> None:
     assert discover_callables(tmp_path) == ["mod:visible"]
 
 
+def test_scan_dirs_restricts_which_subdirectories_are_walked(tmp_path: Path) -> None:
+    _write(tmp_path, "handlers/route.py", "def wanted(state): return state\n")
+    _write(tmp_path, "tests/test_something.py", "def test_unwanted(): pass\n")
+
+    result = discover_callables(tmp_path, scan_dirs=[Path("handlers")])
+
+    assert result == ["handlers.route:wanted"]
+
+
+def test_scan_dirs_module_paths_stay_relative_to_import_root(tmp_path: Path) -> None:
+    _write(tmp_path, "pkg/handlers/route.py", "def wanted(state): return state\n")
+
+    result = discover_callables(tmp_path, scan_dirs=[Path("pkg/handlers")])
+
+    assert result == ["pkg.handlers.route:wanted"]
+
+
+def test_scan_dirs_ignores_a_nonexistent_directory(tmp_path: Path) -> None:
+    _write(tmp_path, "handlers/route.py", "def wanted(state): return state\n")
+
+    result = discover_callables(tmp_path, scan_dirs=[Path("handlers"), Path("does_not_exist")])
+
+    assert result == ["handlers.route:wanted"]
+
+
+def test_scan_dirs_deduplicates_overlapping_directories(tmp_path: Path) -> None:
+    _write(tmp_path, "handlers/route.py", "def wanted(state): return state\n")
+
+    result = discover_callables(
+        tmp_path, scan_dirs=[Path("handlers"), Path("handlers"), Path(".")]
+    )
+
+    assert result == ["handlers.route:wanted"]
+
+
+def test_scan_dirs_skips_a_directory_outside_import_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    _write(outside, "route.py", "def wanted(state): return state\n")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    result = discover_callables(project_root, scan_dirs=[outside])
+
+    assert result == []
+
+
 def test_excludes_agentdrafts_own_package_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -30,6 +30,14 @@ From the main repo, start the local editing API for a schema:
 agentdraft canvas <schema.yaml>
 ```
 
+By default, handler/condition/tool suggestions (FR-4.5) are discovered by scanning the whole
+current directory (excluding AgentDraft's own package, `.venv`, `node_modules`, etc.). To restrict
+suggestions to specific directories - e.g. leaving a project's `tests/` out - repeat `--scan-dir`:
+
+```sh
+agentdraft canvas <schema.yaml> --scan-dir handlers --scan-dir tools
+```
+
 It prints the API's URL (e.g. `http://127.0.0.1:54321`). Point the canvas dev server at it:
 
 ```sh

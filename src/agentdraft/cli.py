@@ -96,10 +96,20 @@ def explain(schema_path: str, output_format: str) -> None:
 @main.command()
 @click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
 @click.option("--port", type=int, default=0, help="Port to bind (default: an OS-picked free port).")
-def canvas(schema_path: str, port: int) -> None:
+@click.option(
+    "--scan-dir",
+    "scan_dirs",
+    multiple=True,
+    type=click.Path(),
+    help="Restrict handler/condition/tool suggestions (FR-4.5) to this directory "
+    "(relative to cwd); repeatable. Default: scan the whole current directory.",
+)
+def canvas(schema_path: str, port: int, scan_dirs: tuple[str, ...]) -> None:
     """Start the local editing API for SCHEMA_PATH, for the canvas frontend (FR-4.3)."""
     _load_schema_or_exit(schema_path)  # fail fast on an already-invalid schema
-    run_canvas_server(Path(schema_path), port=port)  # pragma: no cover - see test_server.py
+    run_canvas_server(  # pragma: no cover - see test_server.py
+        Path(schema_path), port=port, scan_dirs=[Path(d) for d in scan_dirs]
+    )
 
 
 if __name__ == "__main__":

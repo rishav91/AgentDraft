@@ -8,6 +8,7 @@ populate a suggestion list.
 """
 
 import ast
+from collections.abc import Sequence
 from pathlib import Path
 
 _EXCLUDED_DIR_NAMES = {
@@ -70,33 +71,64 @@ def get_callable_source(root: Path, ref: str) -> str | None:
     return None
 
 
-def discover_callables(root: Path) -> list[str]:
-    """Scan ROOT for module-level function definitions, returning `module:function`
-    references sorted for stable output. Skips excluded/hidden directories and
-    any file that fails to parse - a syntax error elsewhere in the project
-    shouldn't break the canvas's suggestion list.
+def discover_callables(import_root: Path, scan_dirs: Sequence[Path] = ()) -> list[str]:
+    """Scan for module-level function definitions, returning `module:function`
+    references sorted for stable output.
+
+    Module paths are always computed relative to IMPORT_ROOT, since that's
+    what actually determines the reference LangGraph/`loader.resolve_reference`
+    would resolve at compile time - narrowing which directories get *walked*
+    must not change what a found function's reference string looks like.
+
+    SCAN_DIRS (each resolved relative to IMPORT_ROOT if not already absolute)
+    restrict which subdirectories are walked - e.g. to exclude a project's
+    `tests/` directory from candidates without excluding it from real imports
+    (`FR-4.5`). Empty/omitted (the default) walks the entire IMPORT_ROOT.
+
+    Skips excluded/hidden directories, AgentDraft's own package, and any file
+    that fails to parse - a syntax error elsewhere in the project shouldn't
+    break the canvas's suggestion list.
     """
+    resolved_import_root = import_root.resolve()
+    walk_roots = (
+        [resolved_import_root]
+        if not scan_dirs
+        else [(d if d.is_absolute() else import_root / d).resolve() for d in scan_dirs]
+    )
+
     results: list[str] = []
-    for py_file in root.rglob("*.py"):
-        rel_parts = py_file.relative_to(root).parts
-        if any(part in _EXCLUDED_DIR_NAMES or part.startswith(".") for part in rel_parts[:-1]):
+    seen_files: set[Path] = set()
+    for walk_root in walk_roots:
+        if not walk_root.is_dir():
             continue
-        if py_file.resolve().is_relative_to(_AGENTDRAFT_PACKAGE_DIR):
-            continue
-
-        module_path = _module_path(py_file, root)
-        if module_path is None:
-            continue
-
-        try:
-            tree = ast.parse(py_file.read_text(), filename=str(py_file))
-        except (SyntaxError, UnicodeDecodeError):
-            continue
-
-        for node in tree.body:
-            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        for py_file in walk_root.rglob("*.py"):
+            resolved = py_file.resolve()
+            if resolved in seen_files:
                 continue
-            if not node.name.startswith("_"):
-                results.append(f"{module_path}:{node.name}")
+            seen_files.add(resolved)
+
+            try:
+                rel_parts = resolved.relative_to(resolved_import_root).parts
+            except ValueError:
+                continue  # outside import_root - can't compute a valid module path
+            if any(part in _EXCLUDED_DIR_NAMES or part.startswith(".") for part in rel_parts[:-1]):
+                continue
+            if resolved.is_relative_to(_AGENTDRAFT_PACKAGE_DIR):
+                continue
+
+            module_path = _module_path(resolved, resolved_import_root)
+            if module_path is None:
+                continue
+
+            try:
+                tree = ast.parse(resolved.read_text(), filename=str(resolved))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+
+            for node in tree.body:
+                if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                    continue
+                if not node.name.startswith("_"):
+                    results.append(f"{module_path}:{node.name}")
 
     return sorted(results)

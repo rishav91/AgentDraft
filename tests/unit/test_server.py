@@ -163,11 +163,11 @@ def test_get_graph_reports_validation_error_if_file_becomes_invalid_on_disk(
 def test_get_callables_scans_the_configured_root(tmp_path: Path) -> None:
     schema_path = tmp_path / "schema.yaml"
     shutil.copy(FIXTURE, schema_path)
-    scan_root = tmp_path / "project"
-    (scan_root / "pkg").mkdir(parents=True)
-    (scan_root / "pkg" / "handlers.py").write_text("def route(state):\n    return state\n")
+    project_root = tmp_path / "project"
+    (project_root / "pkg").mkdir(parents=True)
+    (project_root / "pkg" / "handlers.py").write_text("def route(state):\n    return state\n")
 
-    server = create_server(schema_path, port=0, scan_root=scan_root)
+    server = create_server(schema_path, port=0, import_root=project_root)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -182,14 +182,42 @@ def test_get_callables_scans_the_configured_root(tmp_path: Path) -> None:
     assert body == {"callables": ["pkg.handlers:route"]}
 
 
+def test_get_callables_respects_scan_dirs_restriction(tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.yaml"
+    shutil.copy(FIXTURE, schema_path)
+    project_root = tmp_path / "project"
+    (project_root / "handlers").mkdir(parents=True)
+    (project_root / "handlers" / "route.py").write_text("def wanted(state): return state\n")
+    (project_root / "tests").mkdir(parents=True)
+    (project_root / "tests" / "test_something.py").write_text("def test_unwanted(): pass\n")
+
+    server = create_server(
+        schema_path, port=0, import_root=project_root, scan_dirs=[Path("handlers")]
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        status, body = _get(f"{base_url}/api/callables")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert status == 200
+    # Module path is still relative to import_root (handlers.route), not "route" -
+    # scan_dirs narrows which files get walked, not what a found ref resolves to.
+    assert body == {"callables": ["handlers.route:wanted"]}
+
+
 def test_get_source_returns_the_callables_body(tmp_path: Path) -> None:
     schema_path = tmp_path / "schema.yaml"
     shutil.copy(FIXTURE, schema_path)
-    scan_root = tmp_path / "project"
-    (scan_root / "pkg").mkdir(parents=True)
-    (scan_root / "pkg" / "handlers.py").write_text("def route(state):\n    return state\n")
+    project_root = tmp_path / "project"
+    (project_root / "pkg").mkdir(parents=True)
+    (project_root / "pkg" / "handlers.py").write_text("def route(state):\n    return state\n")
 
-    server = create_server(schema_path, port=0, scan_root=scan_root)
+    server = create_server(schema_path, port=0, import_root=project_root)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

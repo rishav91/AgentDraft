@@ -7,6 +7,7 @@ Ctrl+C.
 """
 
 import json
+from collections.abc import Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -18,7 +19,9 @@ from agentdraft.discovery import discover_callables, get_callable_source
 from agentdraft.schema import format_validation_errors, load_schema, save_schema
 
 
-def _handler_for(schema_path: Path, scan_root: Path) -> type[BaseHTTPRequestHandler]:
+def _handler_for(
+    schema_path: Path, import_root: Path, scan_dirs: Sequence[Path]
+) -> type[BaseHTTPRequestHandler]:
     class CanvasRequestHandler(BaseHTTPRequestHandler):
         def _write_json(self, status: int, payload: dict[str, object]) -> None:
             body = json.dumps(payload).encode()
@@ -38,11 +41,11 @@ def _handler_for(schema_path: Path, scan_root: Path) -> type[BaseHTTPRequestHand
         def do_GET(self) -> None:
             parsed = urlsplit(self.path)
             if parsed.path == "/api/callables":
-                self._write_json(200, {"callables": discover_callables(scan_root)})
+                self._write_json(200, {"callables": discover_callables(import_root, scan_dirs)})
                 return
             if parsed.path == "/api/source":
                 ref = parse_qs(parsed.query).get("ref", [""])[0]
-                source = get_callable_source(scan_root, ref)
+                source = get_callable_source(import_root, ref)
                 if source is None:
                     self._write_json(404, {"errors": [f"no source found for {ref!r}"]})
                     return
@@ -88,26 +91,38 @@ def create_server(
     *,
     host: str = "127.0.0.1",
     port: int = 0,
-    scan_root: Path | None = None,
+    import_root: Path | None = None,
+    scan_dirs: Sequence[Path] = (),
 ) -> ThreadingHTTPServer:
     """Construct (without running) the canvas API server for SCHEMA_PATH.
 
-    `port=0` (the default) asks the OS for an ephemeral free port. `scan_root`
-    (default: the current working directory) is where `GET /api/callables`
-    (`FR-4.5`) looks for `module:function` references - the same base modules
-    resolve against at runtime (`loader.resolve_reference`), so results match
-    what a `handler`/`condition`/tool reference would actually import. Split
-    out from `run_canvas_server` so tests can start/stop a real server without
-    going through the CLI's blocking `serve_forever`/`KeyboardInterrupt` loop.
+    `port=0` (the default) asks the OS for an ephemeral free port. `import_root`
+    (default: the current working directory) is where `module:function`
+    references resolve from - the same base `loader.resolve_reference` uses at
+    compile time, so discovered/previewed references (`FR-4.5`) match what a
+    `handler`/`condition`/tool reference would actually import. `scan_dirs`
+    optionally restricts which subdirectories `GET /api/callables` walks
+    (e.g. to exclude a project's `tests/` directory from suggestions without
+    excluding it from real imports) - empty (the default) scans the whole
+    `import_root`. Split out from `run_canvas_server` so tests can start/stop
+    a real server without going through the CLI's blocking
+    `serve_forever`/`KeyboardInterrupt` loop.
     """
     return ThreadingHTTPServer(
-        (host, port), _handler_for(schema_path, scan_root or Path.cwd())
+        (host, port),
+        _handler_for(schema_path, import_root or Path.cwd(), scan_dirs),
     )
 
 
-def run_canvas_server(schema_path: Path, *, host: str = "127.0.0.1", port: int = 0) -> None:
+def run_canvas_server(
+    schema_path: Path,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    scan_dirs: Sequence[Path] = (),
+) -> None:
     """Serve SCHEMA_PATH's graph over a local HTTP API until interrupted (FR-4.3)."""
-    server = create_server(schema_path, host=host, port=port)
+    server = create_server(schema_path, host=host, port=port, scan_dirs=scan_dirs)
     url = f"http://{host}:{server.server_address[1]}"
     print(f"AGENTDRAFT_CANVAS_URL={url}")
     print(f"agentdraft canvas API running at {url}")
