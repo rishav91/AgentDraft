@@ -30,6 +30,7 @@ erDiagram
         text node_timings "JSON array"
         text error "nullable"
         integer exit_code "nullable"
+        integer pid "the process that started this run"
     }
     checkpoints {
         text thread_id PK
@@ -77,6 +78,7 @@ for that path does not insert a new row (`FR-9.1`).
 | `node_timings` | `TEXT` (JSON) | `[{node, started_at, ended_at, status}, ...]` - a JSON column, not a normalized child table (see §5) |
 | `error` | `TEXT`, nullable | Final error message/summary if `status = failed` |
 | `exit_code` | `INTEGER`, nullable | The CLI exit code the run ended with |
+| `pid` | `INTEGER` | The OS process id that started this run - the liveness check backing the `running` -> `interrupted` reconciliation (§4) |
 
 Indexed on `(schema_path, started_at)` for `agentdraft runs list` (`FR-6.2`).
 
@@ -101,9 +103,11 @@ AgentDraft's own CLI/library code (`save_schema` for `schema_versions`; the run 
 - `runs` rows are written incrementally: an insert at run start (`status: running`), an update at
   run end (`status`, `ended_at`, `node_timings`, `error`, `exit_code`). A process killed
   mid-execution (`SIGKILL`, no chance to run cleanup code) leaves a row stuck at `status: running`
-  - `agentdraft runs list` reconciles this by treating a `running` row whose process is no longer
-  alive as `interrupted` at read time, rather than requiring a clean shutdown to record it
-  correctly.
+  - `agentdraft runs list`/`show` reconcile this by treating a `running` row whose `pid` is no
+  longer alive as `interrupted` at read time (a POSIX `kill(pid, 0)` liveness check; a permission
+  error or unsupported-platform ambiguity is conservatively treated as still alive), rather than
+  requiring a clean shutdown to record it correctly. `prune` (`FR-6.4`) applies the same check and
+  never deletes a row that's still genuinely in flight.
 - SQLite's own locking governs concurrent access (`ADR-010`'s accepted limitation): safe for the
   single local user this store is scoped to, not evaluated for concurrent multi-process load beyond
   that.

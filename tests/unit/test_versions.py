@@ -10,10 +10,8 @@ from agentdraft.versions import (
     record_revision,
 )
 
-
-@pytest.fixture(autouse=True)
-def _isolated_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)
+# tests/conftest.py's autouse _isolate_cwd fixture already sandboxes every test's
+# cwd (and so .agentdraft/) into its own tmp_path.
 
 
 def test_record_revision_creates_revision_one() -> None:
