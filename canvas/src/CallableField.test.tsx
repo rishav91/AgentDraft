@@ -11,51 +11,75 @@ vi.mock("./api", () => ({
 const CALLABLES = ["pkg.a:foo", "pkg.b:bar", "pkg.c:baz"];
 
 describe("CallableField", () => {
-  it("shows every callable in the picker even when the field already has a value set", () => {
+  it("renders a single combobox showing the current value", async () => {
+    render(
+      <CallableField value="pkg.a:foo" onChange={vi.fn()} callables={CALLABLES} apiBase="http://api" />,
+    );
+
+    expect(await screen.findByRole("combobox")).toHaveValue("pkg.a:foo");
+  });
+
+  it("shows the placeholder as a fallback when empty", async () => {
     render(
       <CallableField
-        value="pkg.a:foo"
+        value=""
         onChange={vi.fn()}
         callables={CALLABLES}
         apiBase="http://api"
+        placeholder="module.path:function_name"
       />,
     );
 
-    const picker = screen.getByRole("combobox", { name: /pick a known callable/i });
-    const optionValues = Array.from(picker.querySelectorAll("option")).map((o) => o.getAttribute("value"));
-
-    expect(optionValues).toEqual(["", ...CALLABLES]);
+    expect(await screen.findByPlaceholderText("module.path:function_name")).toHaveValue("");
   });
 
-  it("calls onChange with the picked value, leaving the picker reset to its placeholder", async () => {
+  it("lists every callable in the datalist even when a value is already set", async () => {
+    render(
+      <CallableField value="pkg.a:foo" onChange={vi.fn()} callables={CALLABLES} apiBase="http://api" />,
+    );
+
+    const input = await screen.findByRole("combobox");
+    const datalistId = input.getAttribute("list");
+    const datalist = document.getElementById(datalistId!);
+    const optionValues = Array.from(datalist!.querySelectorAll("option")).map((o) =>
+      o.getAttribute("value"),
+    );
+
+    expect(optionValues).toEqual(CALLABLES);
+  });
+
+  it("clears the displayed text on focus so all suggestions show, without changing the real value", async () => {
     const onChange = vi.fn();
     render(
-      <CallableField value="" onChange={onChange} callables={CALLABLES} apiBase="http://api" />,
+      <CallableField value="pkg.a:foo" onChange={onChange} callables={CALLABLES} apiBase="http://api" />,
     );
     const user = userEvent.setup();
 
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: /pick a known callable/i }),
-      "pkg.b:bar",
-    );
+    await user.click(await screen.findByRole("combobox"));
 
-    expect(onChange).toHaveBeenCalledWith("pkg.b:bar");
+    expect(screen.getByRole("combobox")).toHaveValue("");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("does not render a picker when there are no known callables", () => {
-    render(<CallableField value="" onChange={vi.fn()} callables={[]} apiBase="http://api" />);
-
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-  });
-
-  it("still allows free-text typing regardless of the picker", async () => {
+  it("restores the display to the real value on blur if nothing was typed", async () => {
     const onChange = vi.fn();
     render(
-      <CallableField value="" onChange={onChange} callables={CALLABLES} apiBase="http://api" />,
+      <CallableField value="pkg.a:foo" onChange={onChange} callables={CALLABLES} apiBase="http://api" />,
     );
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole("textbox"), "x");
+    await user.click(await screen.findByRole("combobox"));
+    await user.tab();
+
+    expect(screen.getByRole("combobox")).toHaveValue("pkg.a:foo");
+  });
+
+  it("propagates typed input immediately via onChange", async () => {
+    const onChange = vi.fn();
+    render(<CallableField value="" onChange={onChange} callables={CALLABLES} apiBase="http://api" />);
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByRole("combobox"), "x");
 
     expect(onChange).toHaveBeenCalledWith("x");
   });
