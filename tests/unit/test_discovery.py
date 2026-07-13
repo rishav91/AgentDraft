@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from agentdraft import discovery
-from agentdraft.discovery import discover_callables, get_callable_source
+from agentdraft.discovery import discover_callables, discover_schema_files, get_callable_source
 
 
 def _write(root: Path, rel_path: str, content: str) -> None:
@@ -171,3 +171,94 @@ def test_get_callable_source_returns_none_for_syntax_error(tmp_path: Path) -> No
     _write(tmp_path, "mod.py", "def bad(:\n")
 
     assert get_callable_source(tmp_path, "mod:bad") is None
+
+
+_VALID_SCHEMA = (
+    "schema_version: 1\nnodes:\n  - id: chat\n    llm:\n      provider: anthropic\n      model: x\n"
+)
+
+
+def test_discover_schema_files_reports_node_count_for_a_valid_schema(tmp_path: Path) -> None:
+    _write(tmp_path, "schema.yaml", _VALID_SCHEMA)
+
+    assert discover_schema_files(tmp_path) == [
+        {"path": "schema.yaml", "valid": True, "node_count": 1}
+    ]
+
+
+def test_discover_schema_files_finds_yml_extension_too(tmp_path: Path) -> None:
+    _write(tmp_path, "schema.yml", _VALID_SCHEMA)
+
+    assert discover_schema_files(tmp_path) == [
+        {"path": "schema.yml", "valid": True, "node_count": 1}
+    ]
+
+
+def test_discover_schema_files_marks_malformed_yaml_invalid(tmp_path: Path) -> None:
+    _write(tmp_path, "broken.yaml", "nodes: [this is not: valid: yaml\n")
+
+    assert discover_schema_files(tmp_path) == [
+        {"path": "broken.yaml", "valid": False, "node_count": None}
+    ]
+
+
+def test_discover_schema_files_marks_structurally_invalid_schema_invalid(tmp_path: Path) -> None:
+    _write(tmp_path, "invalid.yaml", "schema_version: 99\nnodes: []\n")
+
+    assert discover_schema_files(tmp_path) == [
+        {"path": "invalid.yaml", "valid": False, "node_count": None}
+    ]
+
+
+def test_discover_schema_files_skips_excluded_directories(tmp_path: Path) -> None:
+    _write(tmp_path, ".venv/lib/thing.yaml", _VALID_SCHEMA)
+    _write(tmp_path, "schema.yaml", _VALID_SCHEMA)
+
+    assert discover_schema_files(tmp_path) == [
+        {"path": "schema.yaml", "valid": True, "node_count": 1}
+    ]
+
+
+def test_discover_schema_files_respects_scan_dirs(tmp_path: Path) -> None:
+    _write(tmp_path, "schemas/a.yaml", _VALID_SCHEMA)
+    _write(tmp_path, "other/b.yaml", _VALID_SCHEMA)
+
+    result = discover_schema_files(tmp_path, scan_dirs=[Path("schemas")])
+
+    assert result == [{"path": "schemas/a.yaml", "valid": True, "node_count": 1}]
+
+
+def test_discover_schema_files_results_are_sorted(tmp_path: Path) -> None:
+    _write(tmp_path, "b.yaml", _VALID_SCHEMA)
+    _write(tmp_path, "a.yaml", _VALID_SCHEMA)
+
+    result = discover_schema_files(tmp_path)
+
+    assert [entry["path"] for entry in result] == ["a.yaml", "b.yaml"]
+
+
+def test_discover_schema_files_ignores_a_nonexistent_scan_dir(tmp_path: Path) -> None:
+    _write(tmp_path, "schemas/a.yaml", _VALID_SCHEMA)
+
+    result = discover_schema_files(tmp_path, scan_dirs=[Path("schemas"), Path("does_not_exist")])
+
+    assert result == [{"path": "schemas/a.yaml", "valid": True, "node_count": 1}]
+
+
+def test_discover_schema_files_deduplicates_overlapping_scan_dirs(tmp_path: Path) -> None:
+    _write(tmp_path, "schemas/a.yaml", _VALID_SCHEMA)
+
+    result = discover_schema_files(tmp_path, scan_dirs=[Path("schemas"), Path("schemas")])
+
+    assert result == [{"path": "schemas/a.yaml", "valid": True, "node_count": 1}]
+
+
+def test_discover_schema_files_skips_a_scan_dir_outside_import_root(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    _write(outside, "a.yaml", _VALID_SCHEMA)
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    result = discover_schema_files(project_root, scan_dirs=[outside])
+
+    assert result == []

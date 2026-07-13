@@ -104,6 +104,161 @@ def test_post_save_writes_valid_edit_to_disk(running_server: tuple[str, Path]) -
     assert reloaded.nodes[0].llm.model == "claude-opus-4-8"
 
 
+@pytest.fixture
+def rooted_server(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+    """Like `running_server`, but with import_root pinned to tmp_path (not cwd),
+    so a test can write sibling schema files that /api/schemas and /api/open
+    can actually see.
+    """
+    schema_path = tmp_path / "schema.yaml"
+    shutil.copy(FIXTURE, schema_path)
+
+    server = create_server(schema_path, port=0, import_root=tmp_path)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        yield base_url, tmp_path
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_get_schemas_lists_yaml_files_and_reports_active(
+    rooted_server: tuple[str, Path],
+) -> None:
+    base_url, _ = rooted_server
+
+    status, body = _get(f"{base_url}/api/schemas")
+
+    assert status == 200
+    assert body["active"] == "schema.yaml"
+    schemas = body["schemas"]  # type: ignore[index]
+    assert {"path": "schema.yaml", "valid": True, "node_count": 3} in schemas  # type: ignore[operator]
+
+
+def test_post_open_switches_the_active_schema(rooted_server: tuple[str, Path]) -> None:
+    base_url, root = rooted_server
+    (root / "other.yaml").write_text(
+        "schema_version: 1\nnodes:\n  - id: solo\n    llm:\n      provider: anthropic\n"
+        "      model: claude-sonnet-5\n"
+    )
+
+    status, body = _post(f"{base_url}/api/open", {"path": "other.yaml"})
+
+    assert status == 200
+    assert [n["id"] for n in body["nodes"]] == ["solo"]  # type: ignore[index]
+
+    # subsequent requests now target the newly-opened file
+    status, graph = _get(f"{base_url}/api/graph")
+    assert [n["id"] for n in graph["nodes"]] == ["solo"]  # type: ignore[index]
+    _, schemas_body = _get(f"{base_url}/api/schemas")
+    assert schemas_body["active"] == "other.yaml"
+
+
+def test_post_open_save_writes_to_the_newly_opened_file(
+    rooted_server: tuple[str, Path],
+) -> None:
+    base_url, root = rooted_server
+    other_path = root / "other.yaml"
+    other_path.write_text(
+        "schema_version: 1\nnodes:\n  - id: solo\n    llm:\n      provider: anthropic\n"
+        "      model: claude-sonnet-5\n"
+    )
+    _post(f"{base_url}/api/open", {"path": "other.yaml"})
+    _, graph = _get(f"{base_url}/api/graph")
+    graph["nodes"][0]["llm"]["model"] = "claude-opus-4-8"  # type: ignore[index]
+
+    status, body = _post(f"{base_url}/api/save", graph)
+
+    assert status == 200
+    assert body == {"ok": True}
+    reloaded = load_schema(other_path)
+    assert reloaded.nodes[0].llm is not None
+    assert reloaded.nodes[0].llm.model == "claude-opus-4-8"
+    # the original schema file must be untouched
+    assert load_schema(root / "schema.yaml").nodes[0].id == "router"
+
+
+def test_post_open_rejects_a_missing_file(rooted_server: tuple[str, Path]) -> None:
+    base_url, _ = rooted_server
+
+    status, body = _post(f"{base_url}/api/open", {"path": "does-not-exist.yaml"})
+
+    assert status == 404
+    assert "errors" in body
+
+
+def test_post_open_rejects_malformed_yaml(rooted_server: tuple[str, Path]) -> None:
+    base_url, root = rooted_server
+    (root / "broken.yaml").write_text("nodes: [this is not: valid: yaml\n")
+
+    status, body = _post(f"{base_url}/api/open", {"path": "broken.yaml"})
+
+    assert status == 422
+    assert "errors" in body
+
+
+def test_post_open_rejects_a_structurally_invalid_schema(
+    rooted_server: tuple[str, Path],
+) -> None:
+    base_url, root = rooted_server
+    (root / "invalid.yaml").write_text("schema_version: 99\nnodes: []\n")
+
+    status, body = _post(f"{base_url}/api/open", {"path": "invalid.yaml"})
+
+    assert status == 422
+    assert "errors" in body
+
+
+def test_post_open_rejects_missing_path_field(rooted_server: tuple[str, Path]) -> None:
+    base_url, _ = rooted_server
+
+    status, body = _post(f"{base_url}/api/open", {})
+
+    assert status == 422
+    assert "errors" in body
+
+
+def test_post_open_rejects_malformed_json_body(rooted_server: tuple[str, Path]) -> None:
+    base_url, _ = rooted_server
+    request = urllib.request.Request(  # noqa: S310
+        f"{base_url}/api/open", data=b"not json", method="POST"
+    )
+    try:
+        with urllib.request.urlopen(request) as response:  # noqa: S310
+            status, body = response.status, json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        status, body = exc.code, json.loads(exc.read())
+
+    assert status == 422
+    assert "errors" in body
+
+
+def test_get_schemas_reports_absolute_active_path_when_outside_import_root(
+    tmp_path: Path,
+) -> None:
+    schema_path = tmp_path / "outside_schema.yaml"
+    shutil.copy(FIXTURE, schema_path)
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    server = create_server(schema_path, port=0, import_root=project_root)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        status, body = _get(f"{base_url}/api/schemas")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert status == 200
+    assert body["active"] == str(schema_path)
+
+
 def test_post_save_round_trips_max_visits_and_fallback(running_server: tuple[str, Path]) -> None:
     base_url, schema_path = running_server
     _, graph = _get(f"{base_url}/api/graph")

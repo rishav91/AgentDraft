@@ -12,16 +12,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import yaml
 from pydantic import ValidationError
 
 from agentdraft.compiler import schema_from_structure, schema_structure
-from agentdraft.discovery import discover_callables, get_callable_source
+from agentdraft.discovery import discover_callables, discover_schema_files, get_callable_source
 from agentdraft.schema import (
     SUPPORTED_PROVIDERS,
     format_validation_errors,
     load_schema,
     save_schema,
 )
+
+
+def _relative_path(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def _handler_for(
@@ -59,6 +67,15 @@ def _handler_for(
                     return
                 self._write_json(200, {"source": source})
                 return
+            if parsed.path == "/api/schemas":
+                self._write_json(
+                    200,
+                    {
+                        "active": _relative_path(schema_path, import_root),
+                        "schemas": discover_schema_files(import_root, scan_dirs),
+                    },
+                )
+                return
             if parsed.path != "/api/graph":
                 self._write_json(404, {"errors": [f"no such route: GET {parsed.path}"]})
                 return
@@ -70,6 +87,36 @@ def _handler_for(
             self._write_json(200, schema_structure(schema))
 
         def do_POST(self) -> None:
+            nonlocal schema_path
+            if self.path == "/api/open":
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length)
+                try:
+                    data = json.loads(raw)
+                except json.JSONDecodeError as exc:
+                    self._write_json(422, {"errors": [f"malformed JSON body: {exc}"]})
+                    return
+                requested = data.get("path") if isinstance(data, dict) else None
+                if not isinstance(requested, str) or not requested:
+                    self._write_json(422, {"errors": ["'path' is required"]})
+                    return
+                candidate = Path(requested)
+                if not candidate.is_absolute():
+                    candidate = import_root / candidate
+                try:
+                    schema = load_schema(candidate)
+                except FileNotFoundError:
+                    self._write_json(404, {"errors": [f"no such file: {requested!r}"]})
+                    return
+                except yaml.YAMLError as exc:
+                    self._write_json(422, {"errors": [f"malformed YAML: {exc}"]})
+                    return
+                except ValidationError as exc:
+                    self._write_json(422, {"errors": format_validation_errors(exc)})
+                    return
+                schema_path = candidate
+                self._write_json(200, schema_structure(schema))
+                return
             if self.path != "/api/save":
                 self._write_json(404, {"errors": [f"no such route: POST {self.path}"]})
                 return

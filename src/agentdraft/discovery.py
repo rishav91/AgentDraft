@@ -1,5 +1,6 @@
 """Discover importable `module:function` callables for the canvas's handler,
-condition, and tool reference fields (FR-4.5).
+condition, and tool reference fields (FR-4.5), and `.yaml`/`.yml` schema
+files for the canvas's schema switcher (FR-4.7).
 
 Static AST scanning, not import - resolving a reference still goes through
 `loader.resolve_reference` (real import), but listing *candidates* for a
@@ -10,6 +11,12 @@ populate a suggestion list.
 import ast
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
+
+import yaml
+from pydantic import ValidationError
+
+from agentdraft.schema import load_schema
 
 _EXCLUDED_DIR_NAMES = {
     "__pycache__",
@@ -132,3 +139,57 @@ def discover_callables(import_root: Path, scan_dirs: Sequence[Path] = ()) -> lis
                     results.append(f"{module_path}:{node.name}")
 
     return sorted(results)
+
+
+_SCHEMA_EXTENSIONS = ("*.yaml", "*.yml")
+
+
+def discover_schema_files(
+    import_root: Path, scan_dirs: Sequence[Path] = ()
+) -> list[dict[str, Any]]:
+    """Scan for `.yaml`/`.yml` files under IMPORT_ROOT (or SCAN_DIRS), for the
+    canvas's schema switcher (FR-4.7). Each entry reports whether the file is
+    currently a loadable AgentDraft schema and, if so, its node count - a
+    broken/in-progress file elsewhere in the project surfaces as
+    `valid: false` rather than breaking the whole list, same principle as
+    `discover_callables`.
+    """
+    resolved_import_root = import_root.resolve()
+    walk_roots = (
+        [resolved_import_root]
+        if not scan_dirs
+        else [(d if d.is_absolute() else import_root / d).resolve() for d in scan_dirs]
+    )
+
+    results: list[dict[str, Any]] = []
+    seen_files: set[Path] = set()
+    for walk_root in walk_roots:
+        if not walk_root.is_dir():
+            continue
+        for pattern in _SCHEMA_EXTENSIONS:
+            for yaml_file in walk_root.rglob(pattern):
+                resolved = yaml_file.resolve()
+                if resolved in seen_files:
+                    continue
+                seen_files.add(resolved)
+
+                try:
+                    rel_parts = resolved.relative_to(resolved_import_root).parts
+                except ValueError:
+                    continue  # outside import_root - can't compute a valid relative path
+                if any(
+                    part in _EXCLUDED_DIR_NAMES or part.startswith(".")
+                    for part in rel_parts[:-1]
+                ):
+                    continue
+
+                rel_path = str(resolved.relative_to(resolved_import_root))
+                try:
+                    schema = load_schema(resolved)
+                except (yaml.YAMLError, ValidationError, OSError):
+                    results.append({"path": rel_path, "valid": False, "node_count": None})
+                    continue
+                results.append({"path": rel_path, "valid": True, "node_count": len(schema.nodes)})
+
+    results.sort(key=lambda entry: entry["path"])
+    return results
