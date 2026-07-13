@@ -162,3 +162,151 @@ body {
   font-weight: 600;
   text-align: center;
 }
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.editor__toolbar button {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+}
+
+.editor__toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.editor__dirty {
+  color: #d97706;
+}
+
+.editor__notice {
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--node-bg);
+}
+
+.editor__errors {
+  padding: 0.5rem 1rem;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 0.8rem;
+}
+
+.editor__errors p {
+  margin: 0.1rem 0;
+}
+
+.editor__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.editor__canvas {
+  flex: 1;
+  min-width: 0;
+}
+
+.inspector {
+  width: 280px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  padding: 0.75rem;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.inspector__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inspector__field label {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.inspector__field input,
+.inspector__field select,
+.inspector__field textarea,
+.inspector__condition {
+  font: inherit;
+  background: var(--node-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.4rem;
+  color: var(--fg);
+  width: 100%;
+}
+
+.inspector__field textarea {
+  min-height: 3rem;
+  resize: vertical;
+}
+
+.inspector__radio-row {
+  display: flex;
+  gap: 1rem;
+  text-transform: none;
+  font-weight: normal;
+}
+
+.inspector__row {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.inspector__row input,
+.inspector__row select {
+  flex: 1;
+}
+
+.inspector__row button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.inspector__error {
+  color: #dc2626;
+  margin: 0;
+}
+
+.inspector__delete {
+  margin-top: auto;
+  background: none;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  border-radius: 6px;
+  padding: 0.4rem;
+  cursor: pointer;
+}

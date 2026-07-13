@@ -1,6 +1,14 @@
 import "@xyflow/react/dist/style.css";
 
-import { Background, Controls, MiniMap, ReactFlow, type NodeTypes } from "@xyflow/react";
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  type Connection,
+  type NodeMouseHandler,
+  type NodeTypes,
+} from "@xyflow/react";
 import { useMemo } from "react";
 
 import { layoutGraph } from "./layout";
@@ -15,19 +23,40 @@ const nodeTypes: NodeTypes = {
 
 type GraphCanvasProps = {
   structure: GraphStructure;
+  mode?: "view" | "edit";
+  selectedNodeId?: string | null;
+  onConnect?: (connection: Connection) => void;
+  onNodeClick?: (nodeId: string) => void;
 };
 
-// Read-only for Phase 2.1 (ROADMAP): nodes can be dragged to detangle the
-// layout, but nothing here writes back to the schema - that's Phase 2.2.
-export function GraphCanvas({ structure }: GraphCanvasProps) {
-  const { nodes, edges } = useMemo(() => layoutGraph(structure), [structure]);
+// mode="view" (the default) reproduces Phase 2.1's exact read-only behavior:
+// nodes can be dragged to detangle the layout, nothing writes back to the
+// schema. mode="edit" (Phase 2.2) additionally allows dragging a connection
+// to wire a direct edge, and clicking a node to select it for the Inspector.
+export function GraphCanvas({
+  structure,
+  mode = "view",
+  selectedNodeId = null,
+  onConnect,
+  onNodeClick,
+}: GraphCanvasProps) {
+  const { nodes: baseNodes, edges } = useMemo(() => layoutGraph(structure), [structure]);
+  const nodes = useMemo(
+    () => baseNodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
+    [baseNodes, selectedNodeId],
+  );
+
+  const handleNodeClick: NodeMouseHandler | undefined =
+    mode === "edit" && onNodeClick ? (_, node) => onNodeClick(node.id) : undefined;
 
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
-      nodesConnectable={false}
+      nodesConnectable={mode === "edit"}
+      onConnect={mode === "edit" ? onConnect : undefined}
+      onNodeClick={handleNodeClick}
       fitView
     >
       <Background />
