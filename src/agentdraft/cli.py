@@ -10,6 +10,7 @@ import traceback
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
@@ -40,6 +41,11 @@ def _compile_or_exit(schema: Schema) -> CompiledStateGraph:
 @click.group()
 def main() -> None:
     """AgentDraft: define agents as YAML, compile them to LangGraph."""
+    # Load a `.env` file from cwd if present (e.g. ANTHROPIC_API_KEY/OPENAI_API_KEY) -
+    # a real, already-exported env var always wins (override=False), .env is only a
+    # fallback. Keys still come from the environment either way (ARCHITECTURE §8);
+    # this is just a convenient way to populate it.
+    load_dotenv(Path.cwd() / ".env", override=False)
 
 
 @main.command()
