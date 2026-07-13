@@ -54,6 +54,10 @@ jobs:
         working-directory: canvas
         run: npm ci
 
+      - name: Lint (eslint)
+        working-directory: canvas
+        run: npm run lint
+
       - name: Type-check and build (FR-4.1/FR-4.2)
         working-directory: canvas
         run: npm run build
