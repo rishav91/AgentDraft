@@ -158,6 +158,13 @@ commit/PR, not only at phase boundaries (`NFR-6.4`). Gating only at phase comple
 regressions accumulate silently between phases on a project with no fixed schedule; continuous CI
 catches them where they're introduced.
 
+**Canvas CI (Phase 2.3):** a second `canvas` job in the same workflow — type-check + build,
+Vitest unit/component tests, and one Playwright e2e test that spawns the real `agentdraft canvas`
+server (not a mock) and drives an actual add-node/wire-edge/save round trip through a real
+browser, asserting the schema file on disk changed and still passes `agentdraft validate`. This is
+the practical form of the Phase 2 sync guarantee ([ROADMAP](ROADMAP.md)): the e2e test would fail
+if the canvas and the CLI's validation ever disagreed on what a valid edit looks like.
+
 Type-checking matters more here than in typical CLI glue code, because `FR-2.5`'s library API
 (§3, Compiler) is a real contract — first for the CLI, later for the planned MCP server
 ([ROADMAP](ROADMAP.md)) — not just internal wiring.

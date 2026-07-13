@@ -31,3 +31,41 @@ jobs:
 
       - name: Test coverage (NFR-6.1)
         run: pytest tests/unit tests/e2e --cov=agentdraft --cov-report=term-missing
+
+  canvas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install agentdraft (needed by the e2e test to spawn `agentdraft canvas`)
+        run: pip install -e ".[dev]"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: canvas/package-lock.json
+
+      - name: Install canvas dependencies
+        working-directory: canvas
+        run: npm ci
+
+      - name: Type-check and build (FR-4.1/FR-4.2)
+        working-directory: canvas
+        run: npm run build
+
+      - name: Unit tests (Vitest)
+        working-directory: canvas
+        run: npm run test
+
+      - name: Install Playwright browsers
+        working-directory: canvas
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests (Playwright, against the real local API server)
+        working-directory: canvas
+        run: npm run test:e2e

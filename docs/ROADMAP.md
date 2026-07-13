@@ -74,34 +74,37 @@ is met, including `NFR-6.1`-`NFR-6.3` test coverage; the schema-expressiveness s
 
 ## Phase 2 - Canvas
 
-**Status:** In progress (2.1 done; 2.2/2.3 not started).
+**Status:** Done.
 
 **Goal:** see and edit an agent's graph visually - the project's actual wedge
 ([PRD §1](PRD.md#1-problem)) - on a schema format already proven by real Phase 1 usage.
 
-**What ships:** a visual renderer for a compiled schema's structure (nodes, edges, routing,
-tool bindings - the same structure `agentdraft explain` already prints as text), then editing
-capability once viewing is solid. 2.1's stack is decided (`ADR-007`): a standalone React +
-TypeScript + Vite app (`canvas/`) using React Flow, reading a static `agentdraft explain --format
-json` (`FR-3.5`) export client-side - no backend process. 2.2's editing interface (how canvas
-changes get written back to the schema file) is not yet decided - a Phase 2.2 planning decision,
-not fixed here.
+**What shipped:** a visual renderer for a compiled schema's structure (nodes, edges, routing,
+tool bindings - the same structure `agentdraft explain` already prints as text), plus full
+editing. 2.1's stack (`ADR-007`): a standalone React + TypeScript + Vite app (`canvas/`) using
+React Flow, reading a static `agentdraft explain --format json` (`FR-3.5`) export client-side -
+no backend process. 2.2's editing interface (`ADR-008`): a thin local API server (`agentdraft
+canvas <schema>`, `FR-4.3`) that parses saves through the same `Schema` pydantic model the CLI
+uses, so canvas and CLI validation can't drift apart. 2.3: Vitest + React Testing Library unit
+tests, and one Playwright e2e test driving the real local server through a real browser, both in
+`.github/workflows/ci.yml`.
 
-**What it unlocks:** the tool's primary value proposition actually lands. Also the second named
-failure condition becomes testable: does the canvas stay in sync with everything the schema can
-express, or does it drift ([PRD §7](PRD.md#7-risks))?
+**What it unlocks:** the tool's primary value proposition actually lands. The second named
+failure condition is now continuously tested, not just retired once: the Playwright e2e test
+(2.3) would fail if the canvas and `agentdraft validate` ever disagreed on what a valid edit looks
+like ([PRD §7](PRD.md#7-risks)).
 
 **Sub-phases:**
 
 - [x] 2.1 - Read-only canvas: render a compiled schema's structure (nodes, edges, routing, tool
   bindings) with no divergence from what `agentdraft explain` prints for the same schema.
-- [ ] 2.2 - Editing capability: modify a graph visually and write the changes back to the schema.
-- [ ] 2.3 - Canvas CI and sync guarantee: CI extended to cover canvas code (test-tooling TBD when
-  2.3 is planned; the framework itself is decided per `ADR-007`).
+- [x] 2.2 - Editing capability: modify a graph visually and write the changes back to the schema.
+- [x] 2.3 - Canvas CI and sync guarantee: CI extended to cover canvas code (Vitest unit tests +
+  a Playwright e2e test against the real local API server).
 
-**Exit criteria:** CI green (extended to cover canvas code, exact test-tooling TBD when 2.3 is
-planned); every construct the schema can express is renderable in the canvas, with no divergence
-between what `agentdraft explain` prints and what the canvas shows for the same schema.
+**Exit criteria:** CI green (canvas code covered by a dedicated CI job); every construct the
+schema can express is renderable and editable in the canvas, with no divergence between what
+`agentdraft explain` prints and what the canvas shows/saves for the same schema.
 
 ## Phase 3+ - Meta-agent and AgentWeave
 
