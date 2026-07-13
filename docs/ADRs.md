@@ -15,6 +15,10 @@ Referenced by ID (`ADR-00N`) from other docs.
 | [ADR-006](#adr-006--schema-versioning) | Schema versioning | Accepted |
 | [ADR-007](#adr-007--canvas-frontend-stack-and-data-interface) | Canvas frontend stack and data interface | Accepted |
 | [ADR-008](#adr-008--canvas-write-back-a-local-api-server) | Canvas write-back: a local API server | Accepted |
+| [ADR-009](#adr-009---checkpointing-backend-langgraph-native-checkpointers) | Checkpointing backend: LangGraph-native checkpointers | Accepted |
+| [ADR-010](#adr-010---local-persistence-store-single-shared-sqlite-file-no-db-abstraction) | Local persistence store: single shared SQLite file, no DB abstraction | Accepted |
+| [ADR-011](#adr-011---observability-opentelemetry-via-langgraphlangchain-callbacks-no-bundled-backend) | Observability: OpenTelemetry via LangGraph/LangChain callbacks, no bundled backend | Accepted |
+| [ADR-012](#adr-012---eval-harness-separate-file-deterministic-assertions-only) | Eval harness: separate file, deterministic assertions only | Accepted |
 
 ---
 
@@ -127,7 +131,7 @@ time by the custom-code loader (`FR-1.6`, [ARCHITECTURE §3](ARCHITECTURE.md#3-c
   schema isn't actually capturing real agent shapes, and the escape hatch could mask that by
   making failure quiet instead of loud.
 - `−` A schema with escape-hatch nodes is not fully portable to a different backend without also
-  porting the referenced Python code — a real cost if/when AgentWeave (Phase 3+) exists.
+  porting the referenced Python code - a real cost if/when AgentWeave (Phase 4+) exists.
 
 ---
 
@@ -286,3 +290,171 @@ still needs nothing running (`ADR-007` unchanged for that path).
   while the server runs. Accepted under the same trust boundary the custom-code escape hatch
   already established (`NFR-4.1`) — local-only, single-user, the schema author already has full
   local code execution regardless.
+
+---
+
+## ADR-009 - Checkpointing backend: LangGraph-native checkpointers
+
+**Context.** Phase 1 explicitly excluded memory/persistence/checkpointing (`FR-1.7`, deferred -
+see [PRD §2](PRD.md#2-goals--non-goals)). Real usage since then surfaced the need to resume a
+crashed or interrupted run rather than re-running an agent from scratch. LangGraph already ships
+checkpointer implementations (`MemorySaver`, `SqliteSaver`, `PostgresSaver`) that plug into
+`StateGraph.compile(checkpointer=...)` with zero reimplementation required - the same shape of
+situation `ADR-005` faced for LLM providers (an existing, multi-backend upstream interface), not
+the zero-alternatives situation `ADR-003` ruled out building against.
+
+**Decision.** The schema gains an optional `checkpointer` block (`backend: sqlite` (default) `|
+postgres`, plus backend-specific connection info) that the compiler passes to LangGraph's own
+checkpointer classes at `StateGraph.compile()` time (`FR-5.1`). `agentdraft run <schema> --resume
+<thread_id>` re-invokes the compiled graph against that `thread_id` so LangGraph's own
+checkpoint-replay logic resumes execution (`FR-5.3`) - AgentDraft does not implement resume logic
+itself. A schema with no `checkpointer` block runs exactly as before (`FR-5.5`) - this is additive,
+not a breaking change to existing schemas.
+
+**Alternatives.**
+- **Build an AgentDraft-owned checkpoint format, independent of LangGraph.** Rejected: violates
+  design tenet 4 ([ARCHITECTURE §1](ARCHITECTURE.md#1-design-tenets)) - compile to the real thing,
+  don't reimplement it. LangGraph already solves checkpoint/replay correctly; reimplementing it
+  would be pure duplicated risk for no capability gain.
+- **SQLite-only, no Postgres option in v1.** Rejected: unlike AgentDraft's own bespoke local
+  storage (`ADR-010`), Postgres support already exists in LangGraph for free. Exposing it is a
+  one-field passthrough onto an existing upstream interface, the same precedent `ADR-005` set for
+  LLM providers - not a new abstraction AgentDraft has to build or maintain.
+
+**Consequences.**
+- `+` Zero reimplementation; resumability inherits LangGraph's own tested checkpoint/replay
+  semantics rather than a parallel, AgentDraft-specific one.
+- `+` Postgres is available to users who want centralized or shared durability, at zero extra
+  AgentDraft code beyond a config field and a connection string read from the environment (same
+  secrets convention as LLM API keys - never inline in the schema).
+- `−` AgentDraft is now coupled to the shape of LangGraph's checkpointer interface, on top of the
+  existing `StateGraph` coupling `ADR-003` already accepted. A breaking upstream change to that
+  interface has no abstraction layer to absorb it.
+- `−` A schema with `checkpointer.backend: postgres` has an external runtime dependency (a
+  reachable Postgres instance) that SQLite-backed schemas don't; the local-first default stays
+  dependency-free, but this deliberately opens a non-local option.
+- `−` Checkpoint resume covers graph *state*, not the real-world side effects of already-executed
+  custom-code nodes (e.g. a tool call that already sent an email). AgentDraft does not attempt to
+  solve at-least-once/exactly-once semantics for those side effects - the same accepted trust
+  boundary the custom-code escape hatch (`ADR-004`) already carries: the author's code, the
+  author's responsibility.
+
+---
+
+## ADR-010 - Local persistence store: single shared SQLite file, no DB abstraction
+
+**Context.** Schema version history and run history are AgentDraft-owned data with no upstream
+library to lean on - unlike `ADR-009`'s checkpointing, there is no existing multi-backend interface
+to pass through. Both need a local store. The idea of a future swappable/pluggable database was
+raised, but nothing today needs it - the same shape of premature-abstraction risk `ADR-003` already
+named for execution backends.
+
+**Decision.** A single shared SQLite file (`.agentdraft/state.db` by default, alongside the schema
+being worked on) holds AgentDraft-owned tables - `schema_versions` (`FR-9.1` schema version history)
+and `runs` (`FR-6.1` run ledger) - plus, when `checkpointer.backend: sqlite` (`ADR-009`), LangGraph's
+own checkpoint tables in the same physical file (see [DATA-MODEL](DATA-MODEL.md)). No database
+abstraction layer, no ORM, no swappable backend for this store - stdlib `sqlite3`, directly. This
+extends `ADR-003`'s governing principle to storage: no abstraction is built until a second real
+backend need exists for AgentDraft-owned data.
+
+**Alternatives.**
+- **Separate SQLite files per feature** (`versions.db`, `runs.db`). Rejected: gives up the free join
+  between a run and the checkpoint thread it produced (both keyed by `thread_id` in one file), and
+  triples file/migration bookkeeping for no concrete benefit at this scale - local, single user.
+- **Build a swappable-DB abstraction now** (e.g. SQLAlchemy or a repository interface), so
+  Postgres/MySQL could back this store later too. Rejected: the textbook premature-abstraction trap
+  `ADR-003` already ruled out - no second concrete backend need exists for this data today, unlike
+  checkpointing, where LangGraph already provides Postgres for free (`ADR-009`).
+
+**Consequences.**
+- `+` One file to gitignore, back up, or inspect with any SQLite tool; a run and the checkpoint
+  thread it produced live side by side, joinable without a second connection.
+- `+` No new dependency (stdlib `sqlite3`), no ORM or migration-framework surface to design or
+  maintain.
+- `−` If a hosted/multi-user version is ever pursued (already a deferred, not excluded, PRD
+  non-goal), this store gets replaced or fronted by something shared - an explicit, accepted future
+  cost, the same shape as `ADR-003`'s own accepted cost for the execution backend.
+- `−` Concurrent writers (e.g. two `agentdraft run` processes against the same project at once)
+  share one SQLite file; SQLite's own locking applies (readers don't block readers, a writer blocks
+  other writers briefly). Acceptable for the single local user this store is scoped to; not
+  evaluated for concurrent multi-user load.
+
+---
+
+## ADR-011 - Observability: OpenTelemetry via LangGraph/LangChain callbacks, no bundled backend
+
+**Context.** Production use of a compiled agent needs visibility into per-node latency, token
+usage, and failures across a run - today, the only way to see any of this is stdout during `run`
+or a post-hoc read of the run ledger (`FR-6.1`). The [README](README.md) previously deferred an
+Observability doc entirely ("no tracing UI until a canvas exists to host it"); that reasoning no
+longer applies once real emission is being built, independent of any UI.
+
+**Decision.** Instrument the compiled graph's execution via LangGraph/LangChain's existing callback
+hooks to emit OpenTelemetry spans - one root span per run, one child span per node (`FR-7.1`),
+token usage as span attributes where the underlying LangChain response exposes it (`FR-7.2`).
+Export is OTLP-based, driven entirely by standard OpenTelemetry environment variables
+(`OTEL_EXPORTER_OTLP_ENDPOINT` etc., `FR-7.3`) - no AgentDraft-specific config surface. AgentDraft
+ships no bundled trace-storage/UI backend (`FR-7.4`); [OBSERVABILITY.md](OBSERVABILITY.md)
+documents self-hosted OSS options (Langfuse, SigNoz, HyperDX, Arize Phoenix) users may point OTLP
+at.
+
+**Alternatives.**
+- **Build a bespoke AgentDraft-specific tracing format and local viewer.** Rejected: duplicates
+  what OpenTelemetry already standardizes, locks users into an AgentDraft-only tool, and is a much
+  larger build than wiring an existing callback hook to an existing SDK.
+- **Bundle a specific backend** (e.g. ship a Langfuse integration as the default/only path).
+  Rejected: picks a vendor/opinion for every user regardless of their existing stack - the same
+  category of premature commitment `ADR-003` avoids for execution backends, applied here to
+  telemetry sinks.
+
+**Consequences.**
+- `+` Vendor-neutral: any OTLP-compatible backend works with zero AgentDraft code changes, today or
+  in the future.
+- `+` No new always-on infrastructure for users who don't set the OTLP env var - spans are created
+  (cheap, in-process) but never sent (`NFR-8.1`).
+- `−` AgentDraft takes a new direct dependency (the OpenTelemetry SDK) purely for instrumentation,
+  even though it bundles no backend to send data to by default.
+- `−` No default local visualization out of the box - someone who wants to see a trace today must
+  stand up, or point at an existing, OTel-compatible backend themselves. A deliberate cost of
+  staying vendor-neutral, not an oversight.
+
+---
+
+## ADR-012 - Eval harness: separate file, deterministic assertions only
+
+**Context.** A schema or prompt edit can silently regress agent behavior with no automated way to
+catch it before the next `agentdraft run`. An eval/regression harness needs a home for test cases
+and a decision on what kinds of assertions it supports.
+
+**Decision.** Eval cases live in a separate YAML file, not embedded in the schema, referencing a
+schema by path (`FR-8.1`); `agentdraft eval <schema> <evals-file>` compiles the schema once and
+runs every case, asserting against final graph state using deterministic checks only - field
+equality, substring, regex - via a dotted/indexed path into the final state (`FR-8.2`, `FR-8.3`).
+A new exit code `4` (eval assertion failure) is appended to the CLI's exit-code taxonomy
+([ARCHITECTURE §4.4](ARCHITECTURE.md#44-exit-codes)), distinct from `1`/`2`/`3` since the schema
+compiled and ran without error - the failure is in the agent's *behavior*, not AgentDraft's
+handling of it (`FR-8.4`).
+
+**Alternatives.**
+- **Embed an `evals:` section in the schema file itself.** Rejected: mixes graph structure with
+  test fixtures in one file, and complicates `ADR-006`'s `schema_version` semantics - is adding a
+  test case a schema-format change?
+- **Support LLM-as-judge assertions for free-form output in v1.** Rejected: a regression safety net
+  should itself be non-flaky and free to run repeatedly in CI; LLM-as-judge assertions introduce
+  cost, latency, and non-determinism into the tool meant to catch regressions, and would need the
+  AI-architecture-level treatment (prompt-injection surface, an explicit "earns its place" case)
+  this project doesn't yet need elsewhere. Revisit if deterministic assertions prove insufficient
+  for real agents whose primary output is prose.
+
+**Consequences.**
+- `+` Eval runs are reproducible and free to run on every commit, the same posture as the existing
+  CI approach (`NFR-6.4`).
+- `+` Schema files stay focused on structure; an evals file is disposable/editable independently -
+  the same relationship the canvas's JSON export already has to the schema (`ADR-007`).
+- `−` Cannot assert on the *quality* or semantic correctness of free-form LLM output, only on
+  structural/deterministic aspects of final state - a real coverage gap for agents whose main
+  output is prose, accepted for now (`ADR-012` alternatives).
+- `−` A new exit code changes a documented stable contract (`CLAUDE.md`); existing scripts checking
+  `if exit_code != 0` are unaffected, but anything branching specifically on `3` vs. "everything
+  else" needs updating for the new `4` case - called out explicitly here since exit codes are
+  conventionally not changed casually.

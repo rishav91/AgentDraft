@@ -118,18 +118,57 @@ graphs, swap `dagre` for `elkjs` (the "layered" algorithm has explicit cycle-bre
 self-loop routing support dagre lacks) - a bigger change (new dependency, layout re-tuning), but
 the cleanest actual fix for this class of graph.
 
-## Phase 3+ - Meta-agent and AgentWeave
+## Phase 3 - Production hardening: persistence, observability, evals
 
 **Status:** Not started.
 
-Two independent, non-blocking tracks. Neither gates the other, and neither gates Phase 1/2 value.
+**Goal:** make a pip-installed AgentDraft agent trustworthy to run for real - resumable after a
+crash, inspectable after the fact, traceable externally, and guarded against silent behavioral
+regressions. All fully deterministic engineering: no natural-language generation risk, which is
+why this phase is sequenced before Phase 4's meta-agent (see Sequencing rationale below).
 
-### 3.1-3.2 - Meta-agent
+**What ships:** an opt-in `checkpointer` schema block backed by LangGraph's own checkpointers
+(`FR-5`, `ADR-009`); local schema version history (`FR-9`); a local run ledger and `agentdraft
+runs` commands (`FR-6`); OpenTelemetry spans with OTLP export, no bundled backend (`FR-7`,
+`ADR-011`); and a deterministic eval/regression harness, `agentdraft eval` (`FR-8`, `ADR-012`). All
+AgentDraft-owned local state lives in one shared SQLite file, no DB abstraction (`ADR-010`).
+
+**What it unlocks:** the tool becomes usable as a production dependency, not just an authoring
+aid - a crashed agent doesn't lose its progress, an operator can see what a run actually did
+without reading stdout, and a schema edit that breaks behavior is caught before it ships.
+
+**Sub-phases:**
+
+- [ ] 3.1 - Checkpointing/resume: `checkpointer` schema block, `SqliteSaver`/`PostgresSaver`
+  passthrough, `agentdraft run --resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`). Built first -
+  establishes the shared local store (`ADR-010`) and the `thread_id` concept the later sub-phases
+  correlate against.
+- [ ] 3.2 - Schema version history: every `save_schema` call recorded as a revision; `agentdraft
+  schema log`/`diff` (`FR-9.1`-`FR-9.4`).
+- [ ] 3.3 - Run history: every `agentdraft run` recorded to the local ledger; `agentdraft runs
+  list`/`show`/`prune` (`FR-6.1`-`FR-6.4`).
+- [ ] 3.4 - Observability: OpenTelemetry spans per run/node, OTLP export via standard env vars,
+  correlated with the run ledger's `run_id` (`FR-7.1`-`FR-7.4`, `ADR-011`, [OBSERVABILITY.md](OBSERVABILITY.md)).
+- [ ] 3.5 - Eval harness: `agentdraft eval <schema> <evals-file>`, deterministic assertions,
+  new exit code `4` (`FR-8.1`-`FR-8.4`, `ADR-012`).
+
+**Exit criteria:** CI green; the full [P3 summary](requirements/system-requirements.md#p3-summary---the-phase-3-production-hardening-scope)
+requirements list is met, including `NFR-7.1`-`NFR-9.1`; a real crash-and-resume scenario has been
+demonstrated end to end against a non-trivial agent, not just covered by unit tests - the same bar
+Phase 1 held itself to for schema expressiveness.
+
+## Phase 4+ - Meta-agent and AgentWeave
+
+**Status:** Not started.
+
+Two independent, non-blocking tracks. Neither gates the other, and neither gates Phase 1/2/3 value.
+
+### 4.1-4.2 - Meta-agent
 
 Generates and iteratively refines schemas from natural-language descriptions.
 Sequenced last because it's the least deterministic part of the system - it depends on Phase 1's
-schema format and Phase 2's inspection surface both being stable enough to generate into and
-validate against.
+schema format, Phase 2's inspection surface, and Phase 3's version-history diff primitive
+(`FR-9.3`) all being stable enough to generate into, validate against, and diff.
 
 Current plan for the natural-language interface: an MCP server exposing AgentDraft's schema
 operations (create/edit nodes and edges, validate, explain, diff a schema) as MCP tools, so an
@@ -137,13 +176,16 @@ existing agentic chat client (e.g. Claude Desktop, Claude Code) drives the itera
 natural-language refinement loop, instead of AgentDraft building and prompting a bespoke
 conversational agent. This is cheap specifically because `FR-2.5` ([requirements](requirements/system-requirements.md))
 keeps the compiler/schema logic in a plain library - the MCP server calls the same functions the
-CLI does, rather than shelling out to the CLI or duplicating logic. Per the governing principle,
-the MCP server itself is still not built until this phase starts; `FR-2.5` is the only Phase 1
-concession made in anticipation of it, because it's cheap now and expensive to retrofit later.
+CLI does, rather than shelling out to the CLI or duplicating logic. The `diff` tool this MCP server
+exposes is the same primitive Phase 3.2 already builds for `agentdraft schema diff` (`FR-9.3`), not
+a second implementation. Per the governing principle, the MCP server itself is still not built
+until this phase starts; `FR-2.5` is the only Phase 1 concession made in anticipation of it,
+because it's cheap now and expensive to retrofit later.
 
-- [ ] 3.1 - MCP server exposing AgentDraft's schema operations (create/edit nodes and edges,
-  validate, explain, diff) as MCP tools, calling the same library functions as the CLI (`FR-2.5`).
-- [ ] 3.2 - Iterative natural-language refinement loop validated end-to-end: a real schema, built
+- [ ] 4.1 - MCP server exposing AgentDraft's schema operations (create/edit nodes and edges,
+  validate, explain, diff) as MCP tools, calling the same library functions as the CLI (`FR-2.5`,
+  `FR-9.3`).
+- [ ] 4.2 - Iterative natural-language refinement loop validated end-to-end: a real schema, built
   via the MCP/chat loop rather than hand-authored, passes `agentdraft validate` without manual
   fixup.
 
@@ -151,7 +193,7 @@ concession made in anticipation of it, because it's cheap now and expensive to r
 real schema, built via the MCP/chat loop rather than hand-authored, passes `agentdraft validate`
 without manual fixup.
 
-### 3.3 - AgentWeave
+### 4.3 - AgentWeave
 
 A custom agent SDK, pursued for learning/control over agent execution internals,
 not because of a concrete LangGraph gap ([PRD §1](PRD.md#1-problem), `ADR-003`). Not on
@@ -165,7 +207,7 @@ This track is intentionally left as a single unchecked item rather than split in
 own exit criteria (below) explicitly set no fixed scope or deadline, so a forced sub-phase
 breakdown would misrepresent it as more planned than it is.
 
-- [ ] 3.3 - AgentWeave: custom agent SDK track (exploratory, no fixed sub-phases or deadline;
+- [ ] 4.3 - AgentWeave: custom agent SDK track (exploratory, no fixed sub-phases or deadline;
   started whenever the author chooses).
 
 **Exit criteria (AgentWeave):** none fixed - this track is exploratory and learning-driven with no
@@ -182,9 +224,10 @@ next phase is built on top of unproven ground:
 | 0 | Can schema → LangGraph compilation work at all? |
 | 1 | Can a declarative schema capture a real single-agent, tool-calling agent without constant escape hatches? (the named Phase 1 failure condition, [PRD §7](PRD.md#7-risks)) |
 | 2 | Can a canvas represent everything the schema expresses, and stay in sync with it? (the named canvas failure condition, [PRD §7](PRD.md#7-risks)) |
-| 3 (meta-agent) | Can natural language reliably generate and refine valid schemas? Deliberately tackled last - it's downstream of both prior risks being retired |
-| 3+ (AgentWeave) | Not a risk to AgentDraft itself - a separate, parallel learning track that also happens to eventually enable the deferred backend-abstraction work |
+| 3 (production hardening) | Can a real agent survive a crash and resume correctly, and can a schema edit's behavioral impact be caught before it ships? Fully deterministic engineering, no new risk category - sequenced before the meta-agent precisely because it isn't the least-certain part of the system |
+| 4 (meta-agent) | Can natural language reliably generate and refine valid schemas? Deliberately tackled last - it's downstream of Phase 1-3's surfaces (schema format, inspection, diffing) all being stable |
+| 4+ (AgentWeave) | Not a risk to AgentDraft itself - a separate, parallel learning track that also happens to eventually enable the deferred backend-abstraction work |
 
 Building the backend-abstraction interface, capability validation, or the shared skills/MCP layer
-before Phase 3+ would mean designing them against zero real alternatives to LangGraph - exactly
+before Phase 4+ would mean designing them against zero real alternatives to LangGraph - exactly
 the premature abstraction the governing principle rules out.

@@ -15,7 +15,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-1.4 | Schema expresses tool bindings (function-calling tools) per node | P0 | A node with bound tools compiles so the LLM can invoke them per LangGraph's native tool-calling mechanism |
 | FR-1.5 | Schema expresses conditional/branching edges | P0 | A schema with a conditional edge compiles to a LangGraph conditional edge with matching routing behavior |
 | FR-1.6 | Schema supports a typed "custom code" node/edge referencing a user-supplied Python callable (`handler: module:function`) | P0 | A schema node/edge with a `handler` field resolves to the referenced callable at compile time (`ADR-004`); an unresolvable reference fails with a clear import error, not a bare traceback |
-| FR-1.7 | Schema expresses memory/persistence config (checkpointers) | P2 — deferred | Out of scope for Phase 1 ([PRD §2](../PRD.md#2-goals--non-goals)); tracked here for future-phase planning only |
+| FR-1.7 | Schema expresses memory/persistence config (checkpointers) | Superseded | Out of scope for Phase 1; superseded by `FR-5` (Phase 3 - [ROADMAP](../ROADMAP.md)), which specifies the actual `checkpointer` block (`ADR-009`) |
 | FR-1.8 | Schema expresses sandboxing config for tool execution | P2 — deferred | Out of scope for Phase 1; see `NFR-4.1` |
 | FR-1.9 | Schema expresses multi-agent/subgraph composition | P2 — deferred | Out of scope for Phase 1 |
 | FR-1.10 | Schema includes a required `schema_version` field identifying the AgentDraft schema format version it targets (`ADR-006`) | P0 | Phase 1 schemas declare `schema_version: 1`; a missing or unrecognized version fails validation with a specific error naming the expected version, not a generic parse failure |
@@ -30,7 +30,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-2.2 | Resolve custom-code `handler` references at compile time | P0 | See `FR-1.6` acceptance criteria |
 | FR-2.3 | Compiled graph's runtime behavior matches the hand-written LangGraph equivalent for the same agent shape | P0 | Manual comparison during Phase 1 (`PRD §6`); no automated equivalence suite planned yet |
 | FR-2.4 | Compiler targets a pinned, tested LangGraph version per AgentDraft release | P1 | AgentDraft's packaging declares an exact or narrow-range LangGraph dependency version |
-| FR-2.5 | Compiler and schema operations (load, validate, compile, explain) are exposed as a plain Python library API, not embedded in CLI command handlers | P0 | `agentdraft validate/run/explain` are thin wrappers that parse argv and call library functions; no business logic lives in the argument-parsing/command-handler code. Enables a future MCP server (`ROADMAP` Phase 3) to call the same functions instead of shelling out to or duplicating the CLI |
+| FR-2.5 | Compiler and schema operations (load, validate, compile, explain) are exposed as a plain Python library API, not embedded in CLI command handlers | P0 | `agentdraft validate/run/explain` are thin wrappers that parse argv and call library functions; no business logic lives in the argument-parsing/command-handler code. Enables a future MCP server (`ROADMAP` Phase 4) to call the same functions instead of shelling out to or duplicating the CLI |
 
 ### FR-3 — CLI
 
@@ -54,6 +54,52 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-4.6 | Canvas offers a closed dropdown for a node's `llm.provider` field | P1 | `GET /api/providers` returns `schema.SUPPORTED_PROVIDERS`, the same sorted list `Schema`'s validation checks a provider against (`FR-1.3`, `ADR-005`) - so the dropdown can never offer (or silently drift from) a value a save would reject. Unlike `FR-4.5`'s callable fields, this is a genuinely closed/enumerable set, so a real `<select>` is appropriate rather than free-text autocomplete; `model` stays free text, since no reliable enumerable model registry exists across providers |
 | FR-4.7 | Canvas can switch which schema file an already-running editing session targets, without restarting `agentdraft canvas` | P1 | `GET /api/schemas` statically scans the project (same exclusion rules as `FR-4.5`) for `.yaml`/`.yml` files and reports each one's validity/node count plus which is currently active; `POST /api/open` (a relative or absolute path) validates and loads the requested file through the same `Schema` model `FR-4.3` uses, then retargets subsequent `GET /api/graph`/`POST /api/save` calls at it - the server's `import_root` and discovery scope stay fixed, only the active schema file changes |
 
+### FR-5 - Persistence & checkpointing
+
+| ID | Requirement | Priority | Acceptance criteria |
+|---|---|---|---|
+| FR-5.1 | Schema may declare an optional `checkpointer` block (`backend: sqlite \| postgres`, backend-specific connection info) enabling LangGraph-native checkpointing for a run (`ADR-009`) | P0 | The compiler passes the corresponding LangGraph checkpointer (`SqliteSaver`/`PostgresSaver`) to `StateGraph.compile()`; a `postgres` backend reads its connection string from an environment variable reference, never inline in the schema, per the existing secrets convention (`CLAUDE.md`) |
+| FR-5.2 | `agentdraft run <schema>` without `--resume` starts a new checkpoint thread when `checkpointer` is configured | P0 | A fresh `thread_id` is generated per run and recorded in the run ledger (`FR-6.1`); checkpoints persist to the configured backend as the graph executes |
+| FR-5.3 | `agentdraft run <schema> --resume <thread_id>` resumes an interrupted or failed run from its last persisted checkpoint | P0 | Execution continues from the last completed node for that `thread_id` rather than re-running the graph from `START`; an unknown/nonexistent `thread_id` fails with a specific error, not a bare LangGraph traceback |
+| FR-5.4 | Default checkpointer backend is SQLite, written to the shared local store (`ADR-010`) | P0 | A schema with `checkpointer: {backend: sqlite}` (or `backend` omitted while `checkpointer` is present) persists to `.agentdraft/state.db` with no additional configuration |
+| FR-5.5 | A schema with no `checkpointer` block runs exactly as before - opt-in, not a breaking change | P0 | Existing Phase 1/2 schemas with no `checkpointer` field validate and run identically to today; `--resume` on such a schema fails with a clear "no checkpointer configured" error rather than a silent no-op |
+
+### FR-6 - Run history
+
+| ID | Requirement | Priority | Acceptance criteria |
+|---|---|---|---|
+| FR-6.1 | Every `agentdraft run` invocation is recorded in the local run ledger: run id, schema path, schema content hash, `thread_id` (if `checkpointer` configured), status, start/end time, per-node timings, error (if any) | P0 | A run row exists in `runs` ([DATA-MODEL](../DATA-MODEL.md)) after every `agentdraft run` invocation, success or failure, including runs killed mid-execution (status `interrupted`, best-effort - see `NFR-7.1`) |
+| FR-6.2 | `agentdraft runs list [schema]` lists past runs with status and duration, optionally filtered to one schema path | P1 | Output is sorted most-recent-first; each row shows run id, schema path, status, started/duration |
+| FR-6.3 | `agentdraft runs show <run_id>` prints full detail for one run: per-node timings, error, and `thread_id` if resumable | P1 | Output includes enough to construct the exact `agentdraft run <schema> --resume <thread_id>` command if the run is resumable |
+| FR-6.4 | `agentdraft runs prune [--older-than <duration>] [--keep-last <n>]` deletes run-ledger entries on explicit request only | P2 | No automatic/background deletion of run history; pruning never touches checkpoint rows still needed to resume a run that hasn't completed |
+
+### FR-7 - Observability
+
+| ID | Requirement | Priority | Acceptance criteria |
+|---|---|---|---|
+| FR-7.1 | Compiled graph execution emits OpenTelemetry spans: one root span per run, one child span per node (start/end, latency, status), correlated with the run ledger's run id via a span attribute (`ADR-011`) | P0 | Running a schema with an OTLP endpoint configured produces a trace with one span per executed node, each carrying the `agentdraft.run_id` attribute matching `FR-6.1`'s ledger row |
+| FR-7.2 | Token usage (prompt/completion/total) is captured as span attributes for LLM-bearing nodes, when the underlying LangChain response exposes it | P1 | A node's span includes token-usage attributes whenever the provider's response includes usage metadata; absent for providers/responses that don't expose it, not a hard failure |
+| FR-7.3 | Span export is OTLP-based and driven entirely by standard OpenTelemetry environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) | P0 | With no `OTEL_EXPORTER_OTLP_ENDPOINT` set, spans are created but exported nowhere (no-op exporter, `NFR-8.1`); setting the standard env var(s) is sufficient to export, with no AgentDraft-specific config file or flag needed |
+| FR-7.4 | AgentDraft bundles no observability backend | P0 | [OBSERVABILITY.md](../OBSERVABILITY.md) documents self-hosted OSS options (Langfuse, SigNoz, HyperDX, Arize Phoenix) a user may point OTLP at; none is a runtime dependency of `agentdraft` itself |
+
+### FR-8 - Eval harness
+
+| ID | Requirement | Priority | Acceptance criteria |
+|---|---|---|---|
+| FR-8.1 | An evals file (YAML) lists named cases against one schema: an initial state input and one or more assertions on final state (`ADR-012`) | P0 | A malformed evals file (missing `schema`/`cases`, unresolvable schema path) fails `agentdraft eval` with a field-specific error before any case runs, matching `NFR-2.1`'s error-quality bar |
+| FR-8.2 | `agentdraft eval <schema> <evals-file>` compiles the schema once and runs every case, reporting pass/fail per case | P0 | Output names each case and whether it passed; a run summary (N passed / M failed) prints at the end |
+| FR-8.3 | Assertion types are deterministic and structural: field equality, substring, regex, evaluated against final graph state via a dotted/indexed path | P0 | Each assertion type is covered by at least one unit test; no assertion type invokes an LLM or any non-deterministic check |
+| FR-8.4 | Exit code `4` is appended to the CLI's exit-code taxonomy: one or more eval assertions failed | P0 | `agentdraft eval` exits `4` if every case ran to completion but at least one assertion failed; exits `1`/`2`/`3` for evals-file/schema validation, compile, or runtime errors respectively (same taxonomy as `run`); exits `0` only if every case's every assertion passed |
+
+### FR-9 - Schema version history
+
+| ID | Requirement | Priority | Acceptance criteria |
+|---|---|---|---|
+| FR-9.1 | Every `save_schema` call records a new revision of that schema file's content to the local store (`ADR-010`) | P0 | Saving a schema (CLI or canvas `POST /api/save`, `FR-4.3`) appends a `schema_versions` row (path, content hash, full YAML snapshot, timestamp); a save that doesn't change the file's content does not create a duplicate revision |
+| FR-9.2 | `agentdraft schema log <schema>` lists recorded revisions for a schema path, most recent first | P1 | Output shows revision number, timestamp, and content hash for each recorded save |
+| FR-9.3 | `agentdraft schema diff <schema> <rev-a> <rev-b>` shows a text diff between two recorded revisions | P1 | Output is a standard unified diff of the two revisions' YAML text; also usable as the diff primitive the Phase 4+ meta-agent's MCP tools plan to expose ([ROADMAP](../ROADMAP.md) 4.1) |
+| FR-9.4 | Schema version history is local-only, distinct from `schema_version` (`ADR-006`) | P0 | Revision numbers here track edit history of one file over time; `schema_version` (`FR-1.10`) remains the unrelated schema-*format* version field - no field or command conflates the two |
+
 ## Non-functional requirements
 
 | ID | Requirement | Priority | Quantified target |
@@ -68,6 +114,10 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | NFR-6.2 | Testability: CLI commands (`validate`/`run`/`explain`) have end-to-end tests against fixture schemas | P0 | Fixture schemas cover each Phase 1 schema construct (`FR-1.1`-`FR-1.6`); LLM calls are mocked/stubbed, not live, so tests stay deterministic and free |
 | NFR-6.3 | Testability: `explain` output is covered by golden-file/snapshot tests | P1 | A compiled-structure regression changes a committed golden file's diff, making unintended compiler changes visible in review |
 | NFR-6.4 | CI: lint, type-check, and the full test suite run on every commit/PR, not only at phase boundaries | P0 | CI pipeline fails the build on any lint, type, or test failure; a phase is not considered complete unless CI is green *and* that phase's specific FR/NFR acceptance criteria are met |
+| NFR-7.1 | Durability: a run with `checkpointer` configured is resumable from its last completed node after the process is killed or crashes | P0 | An e2e test kills the `agentdraft run` process mid-execution (`SIGKILL`) and asserts `--resume <thread_id>` continues from the correct checkpoint without re-executing already-completed nodes |
+| NFR-7.2 | Durability: the default SQLite checkpointer/local-store backend has no server process or network dependency | P1 | `checkpointer: {backend: sqlite}` (or the default) works fully offline, with no reachable service beyond the local filesystem |
+| NFR-8.1 | Observability overhead: span creation performs no network I/O when no OTLP endpoint is configured | P1 | With `OTEL_EXPORTER_OTLP_ENDPOINT` unset, a run produces no outbound network calls attributable to tracing (verified by test double/no-op exporter assertion) |
+| NFR-9.1 | Eval determinism: two consecutive `agentdraft eval` runs of the same evals file against an unchanged schema produce identical pass/fail results for all deterministic assertions | P1 | Re-running `agentdraft eval` twice in CI with no schema change yields the same exit code and per-case results both times |
 
 ## P0 summary — the Phase 1 MVP
 
@@ -76,5 +126,22 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 - **CLI:** `validate`, `run`, `explain`, with a stable exit-code taxonomy (`FR-3.1`-`FR-3.4`).
 - **Quality bar:** field-specific errors everywhere (`NFR-2.1`); no behavioral divergence from hand-written LangGraph (`NFR-1.1`); unit + e2e tests green in CI on every commit (`NFR-6.1`-`NFR-6.4`).
 
-Everything marked P2 — deferred (memory, sandboxing, multi-agent) is explicitly out of the Phase 1
+Everything marked P2 - deferred (sandboxing, multi-agent) is explicitly out of the Phase 1
 MVP; see [ROADMAP](../ROADMAP.md) for when each is picked back up.
+
+## P3 summary - the Phase 3 production-hardening scope
+
+- **Persistence & checkpointing:** opt-in `checkpointer` block, SQLite default / Postgres available,
+  explicit `--resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`).
+- **Run history:** every run recorded to a local ledger; `agentdraft runs list`/`show`/`prune`
+  (`FR-6.1`-`FR-6.4`).
+- **Observability:** OpenTelemetry spans per run/node, OTLP export via standard env vars, no
+  bundled backend (`FR-7.1`-`FR-7.4`, `ADR-011`).
+- **Eval harness:** `agentdraft eval <schema> <evals-file>`, deterministic assertions only, exit
+  code `4` on assertion failure (`FR-8.1`-`FR-8.4`, `ADR-012`).
+- **Schema version history:** every save recorded as a revision, browsable via `agentdraft schema
+  log`/`diff` (`FR-9.1`-`FR-9.4`), distinct from the `schema_version` format field (`ADR-006`).
+- **Storage:** all AgentDraft-owned local state (versions, run ledger, default checkpoints) in one
+  shared SQLite file, no DB abstraction (`ADR-010`).
+
+See [ROADMAP](../ROADMAP.md) Phase 3 for sub-phase sequencing, starting with checkpointing.
