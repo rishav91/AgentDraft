@@ -7,12 +7,14 @@ import {
   MiniMap,
   ReactFlow,
   type Connection,
+  type EdgeTypes,
   type NodeChange,
   type NodeMouseHandler,
   type NodeTypes,
 } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 
+import { SelfLoopEdge } from "./edges/SelfLoopEdge";
 import type { AppFlowNode } from "./flowTypes";
 import { layoutGraph } from "./layout";
 import { EndpointNode } from "./nodes/EndpointNode";
@@ -22,6 +24,10 @@ import type { GraphStructure } from "./types";
 const nodeTypes: NodeTypes = {
   schemaNode: SchemaNode,
   endpointNode: EndpointNode,
+};
+
+const edgeTypes: EdgeTypes = {
+  selfLoop: SelfLoopEdge,
 };
 
 type GraphCanvasProps = {
@@ -77,6 +83,7 @@ export function GraphCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       nodesDraggable
       nodesConnectable={mode === "edit"}
       onNodesChange={handleNodesChange}

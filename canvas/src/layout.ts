@@ -7,7 +7,9 @@ import type { GraphStructure } from "./types";
 const ARROW_MARKER = { type: MarkerType.ArrowClosed, width: 18, height: 18 } as const;
 
 const NODE_WIDTH = 220;
-const NODE_HEIGHT = 72;
+// Exported so SelfLoopEdge can compute exact clearance above a node's real
+// top edge, instead of guessing an offset from the handle's y (its center).
+export const NODE_HEIGHT = 72;
 const ENDPOINT_WIDTH = 90;
 const ENDPOINT_HEIGHT = 36;
 
@@ -50,7 +52,10 @@ export function layoutGraph(structure: GraphStructure): {
         id: `e${edgeCounter++}`,
         source: edge.from,
         target: edge.to,
-        type: "smoothstep",
+        // React Flow's built-in edge types can't render a node pointing at
+        // itself - their path math assumes source/target are different
+        // nodes (see SelfLoopEdge.tsx).
+        type: edge.from === edge.to ? "selfLoop" : "smoothstep",
         markerEnd: ARROW_MARKER,
       });
     } else if (edge.kind === "conditional" && edge.routes) {
@@ -61,7 +66,7 @@ export function layoutGraph(structure: GraphStructure): {
           id: `e${edgeCounter++}`,
           source: edge.from,
           target,
-          type: "smoothstep",
+          type: edge.from === target ? "selfLoop" : "smoothstep",
           label: isCappedFallback ? `${routeKey} (after ${edge.max_visits})` : routeKey,
           data: { condition: edge.condition ?? "" },
           style: { strokeDasharray: "5 5" },

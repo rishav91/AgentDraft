@@ -195,4 +195,43 @@ describe("layoutGraph", () => {
     expect(byLabel.get("good")).toBe("good (after 3)");
     expect(byLabel.get("revise")).toBe("revise");
   });
+
+  it("uses the selfLoop edge type for a route back to its own source node", () => {
+    const { edges } = layoutGraph(CAPPED_LOOP);
+
+    const selfEdge = edges.find((e) => e.source === "critique" && e.target === "critique");
+    const forwardEdge = edges.find((e) => e.target === "END");
+    expect(selfEdge?.type).toBe("selfLoop");
+    expect(forwardEdge?.type).toBe("smoothstep");
+  });
+
+  it("uses the selfLoop edge type for a self-referencing direct edge", () => {
+    const structure: GraphStructure = {
+      schema_version: 1,
+      nodes: [
+        {
+          id: "solo",
+          kind: "llm",
+          llm: { provider: "anthropic", model: "claude-sonnet-5", system: null },
+          handler: null,
+          tools: [],
+        },
+      ],
+      edges: [
+        {
+          from: "solo",
+          kind: "direct",
+          to: "solo",
+          condition: null,
+          routes: null,
+          max_visits: null,
+          fallback: null,
+        },
+      ],
+    };
+
+    const { edges } = layoutGraph(structure);
+
+    expect(edges.find((e) => e.source === "solo" && e.target === "solo")?.type).toBe("selfLoop");
+  });
 });

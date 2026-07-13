@@ -163,6 +163,16 @@ body {
   text-align: center;
 }
 
+.self-loop-edge__label {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
 .editor {
   display: flex;
   flex-direction: column;
