@@ -31,16 +31,31 @@ export function Inspector({
   onSetOutgoingConditional,
 }: InspectorProps) {
   const node = structure.nodes.find((n) => n.id === nodeId);
+  const edges = outgoingEdges(structure, nodeId);
+  const isConditional = edges.some((edge) => edge.kind === "conditional");
+  const directTargets = isConditional
+    ? []
+    : edges.map((edge) => edge.to).filter((to): to is string => to !== null);
+  const conditionalEdge = edges.find((edge) => edge.kind === "conditional");
+  const condition = conditionalEdge?.condition ?? "";
+  const routes = conditionalEdge?.routes ?? {};
+
   const [idDraft, setIdDraft] = useState(nodeId);
   const [idError, setIdError] = useState<string | null>(null);
-  // Local-only cache of the "other" kind's last-known fields (FR-4.2), so
-  // toggling llm <-> handler and back restores what was there before -
-  // never persisted to the schema, since Node's kind is XOR (ADR-004).
+  // Local-only cache of the "other" kind/routing mode's last-known fields
+  // (FR-4.2), so toggling llm <-> handler or direct <-> conditional and back
+  // restores what was there before - never persisted to the schema, since
+  // both are XOR shapes (`Node`/`Edge` in schema.py, ADR-004).
   const [cachedLlm, setCachedLlm] = useState<{ llm: LLMInfo; tools: string[] }>({
     llm: node?.llm ?? EMPTY_LLM,
     tools: node?.kind === "llm" ? (node?.tools ?? []) : [],
   });
   const [cachedHandler, setCachedHandler] = useState(node?.handler ?? "");
+  const [cachedDirectTargets, setCachedDirectTargets] = useState<string[]>(directTargets);
+  const [cachedConditional, setCachedConditional] = useState<{
+    condition: string;
+    routes: Record<string, string>;
+  }>({ condition, routes });
 
   if (!node) return null;
 
@@ -63,6 +78,20 @@ export function Inspector({
     });
   };
 
+  const switchToDirect = () => {
+    if (isConditional) {
+      setCachedConditional({ condition, routes });
+    }
+    onSetOutgoingDirect(cachedDirectTargets);
+  };
+
+  const switchToConditional = () => {
+    if (!isConditional) {
+      setCachedDirectTargets(directTargets);
+    }
+    onSetOutgoingConditional(cachedConditional.condition, cachedConditional.routes);
+  };
+
   const otherIds = structure.nodes.filter((n) => n.id !== nodeId).map((n) => n.id);
   const targetOptions = [...otherIds, "END"];
 
@@ -79,15 +108,6 @@ export function Inspector({
     setIdError(null);
     onUpdateNode({ id: idDraft });
   };
-
-  const edges = outgoingEdges(structure, nodeId);
-  const isConditional = edges.some((edge) => edge.kind === "conditional");
-  const directTargets = isConditional
-    ? []
-    : edges.map((edge) => edge.to).filter((to): to is string => to !== null);
-  const conditionalEdge = edges.find((edge) => edge.kind === "conditional");
-  const condition = conditionalEdge?.condition ?? "";
-  const routes = conditionalEdge?.routes ?? {};
 
   return (
     <aside className="inspector">
@@ -218,19 +238,11 @@ export function Inspector({
         <label>outgoing routing</label>
         <div className="inspector__radio-row">
           <label>
-            <input
-              type="radio"
-              checked={!isConditional}
-              onChange={() => onSetOutgoingDirect(directTargets)}
-            />
+            <input type="radio" checked={!isConditional} onChange={switchToDirect} />
             direct
           </label>
           <label>
-            <input
-              type="radio"
-              checked={isConditional}
-              onChange={() => onSetOutgoingConditional(condition, routes)}
-            />
+            <input type="radio" checked={isConditional} onChange={switchToConditional} />
             conditional
           </label>
         </div>
