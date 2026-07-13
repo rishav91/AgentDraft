@@ -106,6 +106,18 @@ like ([PRD §7](PRD.md#7-risks)).
 schema can express is renderable and editable in the canvas, with no divergence between what
 `agentdraft explain` prints and what the canvas shows/saves for the same schema.
 
+**Known follow-up (deferred):** auto-layout for cyclic graphs (self-loops, reflection-style
+routing back to an earlier node, `FR-1.12`) produces crossing/looping edges - see `layout.ts`.
+`dagre` computes crossing-minimized edge routing internally (via dummy nodes) but the current
+code only uses it for node positions; edges are rendered as generic React Flow `smoothstep`
+paths between ports, with no crossing-awareness at all. Two escalating fixes if this gets
+revisited: (1) extract dagre's actual routed points (`graph.edge(...).points`) and render edges
+through them with a custom edge component, instead of discarding that data - bounded, mechanical,
+reuses what dagre already computes; (2) if that's still not clean enough for heavily cyclic
+graphs, swap `dagre` for `elkjs` (the "layered" algorithm has explicit cycle-breaking and
+self-loop routing support dagre lacks) - a bigger change (new dependency, layout re-tuning), but
+the cleanest actual fix for this class of graph.
+
 ## Phase 3+ - Meta-agent and AgentWeave
 
 **Status:** Not started.
