@@ -271,6 +271,11 @@ body {
   width: 100%;
 }
 
+.callable-field__row {
+  display: flex;
+  gap: 0.3rem;
+}
+
 .callable-field input {
   font: inherit;
   background: var(--node-bg);
@@ -279,6 +284,17 @@ body {
   padding: 0.3rem 0.4rem;
   color: var(--fg);
   width: 100%;
+  flex: 1;
+}
+
+.callable-field__picker {
+  font: inherit;
+  background: var(--node-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  width: 1.8rem;
+  flex-shrink: 0;
 }
 
 .inspector__row .callable-field {

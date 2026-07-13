@@ -123,6 +123,7 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
         </div>
         {selectedNodeId && (
           <Inspector
+            key={selectedNodeId}
             structure={structure}
             nodeId={selectedNodeId}
             apiBase={apiBase}

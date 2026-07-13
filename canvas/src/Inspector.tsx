@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { CallableField } from "./CallableField";
 import { outgoingEdges } from "./editorActions";
-import type { GraphNode, GraphStructure } from "./types";
+import type { GraphNode, GraphStructure, LLMInfo } from "./types";
 
 type InspectorProps = {
   structure: GraphStructure;
@@ -17,7 +17,7 @@ type InspectorProps = {
 };
 
 const RESERVED_IDS = new Set(["START", "END"]);
-const CALLABLES_DATALIST_ID = "agentdraft-callables";
+const EMPTY_LLM: LLMInfo = { provider: "", model: "", system: null };
 
 export function Inspector({
   structure,
@@ -33,8 +33,35 @@ export function Inspector({
   const node = structure.nodes.find((n) => n.id === nodeId);
   const [idDraft, setIdDraft] = useState(nodeId);
   const [idError, setIdError] = useState<string | null>(null);
+  // Local-only cache of the "other" kind's last-known fields (FR-4.2), so
+  // toggling llm <-> handler and back restores what was there before -
+  // never persisted to the schema, since Node's kind is XOR (ADR-004).
+  const [cachedLlm, setCachedLlm] = useState<{ llm: LLMInfo; tools: string[] }>({
+    llm: node?.llm ?? EMPTY_LLM,
+    tools: node?.kind === "llm" ? (node?.tools ?? []) : [],
+  });
+  const [cachedHandler, setCachedHandler] = useState(node?.handler ?? "");
 
   if (!node) return null;
+
+  const switchToHandler = () => {
+    if (node.kind === "llm") {
+      setCachedLlm({ llm: node.llm ?? cachedLlm.llm, tools: node.tools });
+    }
+    onUpdateNode({ kind: "handler", llm: null, handler: cachedHandler, tools: [] });
+  };
+
+  const switchToLlm = () => {
+    if (node.kind === "handler") {
+      setCachedHandler(node.handler ?? cachedHandler);
+    }
+    onUpdateNode({
+      kind: "llm",
+      llm: cachedLlm.llm,
+      handler: null,
+      tools: cachedLlm.tools,
+    });
+  };
 
   const otherIds = structure.nodes.filter((n) => n.id !== nodeId).map((n) => n.id);
   const targetOptions = [...otherIds, "END"];
@@ -64,12 +91,6 @@ export function Inspector({
 
   return (
     <aside className="inspector">
-      <datalist id={CALLABLES_DATALIST_ID}>
-        {callables.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-
       <div className="inspector__field">
         <label>id</label>
         <input
@@ -84,27 +105,11 @@ export function Inspector({
         <label>kind</label>
         <div className="inspector__radio-row">
           <label>
-            <input
-              type="radio"
-              checked={node.kind === "llm"}
-              onChange={() =>
-                onUpdateNode({
-                  kind: "llm",
-                  llm: node.llm ?? { provider: "", model: "", system: null },
-                  handler: null,
-                })
-              }
-            />
+            <input type="radio" checked={node.kind === "llm"} onChange={switchToLlm} />
             llm
           </label>
           <label>
-            <input
-              type="radio"
-              checked={node.kind === "handler"}
-              onChange={() =>
-                onUpdateNode({ kind: "handler", llm: null, handler: node.handler ?? "", tools: [] })
-              }
-            />
+            <input type="radio" checked={node.kind === "handler"} onChange={switchToHandler} />
             handler
           </label>
         </div>
@@ -177,7 +182,6 @@ export function Inspector({
                   value={tool}
                   apiBase={apiBase}
                   callables={callables}
-                  datalistId={CALLABLES_DATALIST_ID}
                   onChange={(value) => {
                     const tools = [...node.tools];
                     tools[i] = value;
@@ -204,7 +208,6 @@ export function Inspector({
             value={node.handler ?? ""}
             apiBase={apiBase}
             callables={callables}
-            datalistId={CALLABLES_DATALIST_ID}
             placeholder="module.path:function_name"
             onChange={(value) => onUpdateNode({ handler: value })}
           />
@@ -274,7 +277,6 @@ export function Inspector({
               value={condition}
               apiBase={apiBase}
               callables={callables}
-              datalistId={CALLABLES_DATALIST_ID}
               placeholder="module.path:function_name"
               onChange={(value) => onSetOutgoingConditional(value, routes)}
             />
