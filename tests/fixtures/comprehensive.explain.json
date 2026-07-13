@@ -39,7 +39,9 @@
       "kind": "direct",
       "to": "router",
       "condition": null,
-      "routes": null
+      "routes": null,
+      "max_visits": null,
+      "fallback": null
     },
     {
       "from": "router",
@@ -49,21 +51,27 @@
       "routes": {
         "positive": "search",
         "negative": "shout"
-      }
+      },
+      "max_visits": null,
+      "fallback": null
     },
     {
       "from": "search",
       "kind": "direct",
       "to": "shout",
       "condition": null,
-      "routes": null
+      "routes": null,
+      "max_visits": null,
+      "fallback": null
     },
     {
       "from": "shout",
       "kind": "direct",
       "to": "END",
       "condition": null,
-      "routes": null
+      "routes": null,
+      "max_visits": null,
+      "fallback": null
     }
   ]
 }

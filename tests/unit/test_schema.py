@@ -175,6 +175,85 @@ def test_rejects_conditional_edge_alongside_another_edge_from_same_source() -> N
         )
 
 
+def test_parses_conditional_edge_with_max_visits_and_fallback() -> None:
+    schema = Schema.model_validate(
+        _two_node_schema_dict(
+            [
+                {
+                    "from": "a",
+                    "condition": "tests.support.routing:by_last_message_content",
+                    "routes": {"positive": "b", "negative": "END"},
+                    "max_visits": 3,
+                    "fallback": "negative",
+                }
+            ]
+        )
+    )
+
+    edge = schema.edges[0]
+    assert edge.max_visits == 3
+    assert edge.fallback == "negative"
+
+
+def test_rejects_max_visits_on_a_direct_edge() -> None:
+    with pytest.raises(ValidationError, match="sets 'max_visits'/'fallback'"):
+        Schema.model_validate(
+            _two_node_schema_dict([{"from": "a", "to": "b", "max_visits": 3, "fallback": "x"}])
+        )
+
+
+def test_rejects_max_visits_without_fallback() -> None:
+    with pytest.raises(ValidationError, match="without the other"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [{"from": "a", "condition": "x:y", "routes": {"k": "b"}, "max_visits": 3}]
+            )
+        )
+
+
+def test_rejects_fallback_without_max_visits() -> None:
+    with pytest.raises(ValidationError, match="without the other"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [{"from": "a", "condition": "x:y", "routes": {"k": "b"}, "fallback": "k"}]
+            )
+        )
+
+
+def test_rejects_non_positive_max_visits() -> None:
+    with pytest.raises(ValidationError, match="positive integer"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [
+                    {
+                        "from": "a",
+                        "condition": "x:y",
+                        "routes": {"k": "b"},
+                        "max_visits": 0,
+                        "fallback": "k",
+                    }
+                ]
+            )
+        )
+
+
+def test_rejects_fallback_not_in_routes() -> None:
+    with pytest.raises(ValidationError, match="fallback 'ghost' is not a key"):
+        Schema.model_validate(
+            _two_node_schema_dict(
+                [
+                    {
+                        "from": "a",
+                        "condition": "x:y",
+                        "routes": {"k": "b"},
+                        "max_visits": 3,
+                        "fallback": "ghost",
+                    }
+                ]
+            )
+        )
+
+
 def test_parses_handler_node() -> None:
     schema = Schema.model_validate(
         {
@@ -262,6 +341,47 @@ def test_dump_schema_omits_tools_for_handler_node() -> None:
         "id": "shout",
         "handler": "tests.support.handlers:uppercase_last_message",
     }
+
+
+def test_dump_schema_round_trips_max_visits_and_fallback() -> None:
+    schema = Schema.model_validate(
+        _two_node_schema_dict(
+            [
+                {
+                    "from": "a",
+                    "condition": "tests.support.routing:by_last_message_content",
+                    "routes": {"positive": "b", "negative": "END"},
+                    "max_visits": 3,
+                    "fallback": "negative",
+                }
+            ]
+        )
+    )
+
+    dumped = dump_schema(schema)
+
+    assert dumped["edges"][0]["max_visits"] == 3
+    assert dumped["edges"][0]["fallback"] == "negative"
+    assert Schema.model_validate(yaml.safe_load(schema_to_yaml(schema))) == schema
+
+
+def test_dump_schema_omits_max_visits_and_fallback_when_unset() -> None:
+    schema = Schema.model_validate(
+        _two_node_schema_dict(
+            [
+                {
+                    "from": "a",
+                    "condition": "tests.support.routing:by_last_message_content",
+                    "routes": {"positive": "b", "negative": "END"},
+                }
+            ]
+        )
+    )
+
+    dumped = dump_schema(schema)
+
+    assert "max_visits" not in dumped["edges"][0]
+    assert "fallback" not in dumped["edges"][0]
 
 
 def test_save_schema_writes_yaml_file(tmp_path: Path) -> None:

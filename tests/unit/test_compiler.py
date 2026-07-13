@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from agentdraft.compiler import (
     CompileError,
     compile_schema,
+    explain_schema,
     schema_from_structure,
     schema_structure,
 )
@@ -235,6 +236,132 @@ def test_conditional_edge_routes_to_the_matching_branch(mock_init_chat_model: Ma
     assert result["messages"][-1].content == "took the yes branch"
 
 
+def _make_capped_reflection_schema(max_visits: int) -> Schema:
+    """draft -> critique -> {revise -> draft, good -> END}, capped so an always-
+    "revise" critique still terminates after MAX_VISITS executions of critique.
+    """
+    return Schema(
+        schema_version=1,
+        nodes=[
+            Node(id="draft", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(id="critique", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+        ],
+        edges=[
+            Edge(from_="START", to="draft"),
+            Edge(from_="draft", to="critique"),
+            Edge(
+                from_="critique",
+                condition="tests.support.routing:by_last_message_content",
+                routes={"negative": "draft", "positive": "END"},
+                max_visits=max_visits,
+                fallback="positive",
+            ),
+        ],
+    )
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_max_visits_forces_fallback_after_the_cap_even_though_condition_keeps_looping(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    call_order: list[str] = []
+
+    def make_llm(node_name: str, content: str) -> MagicMock:
+        llm = MagicMock()
+
+        def invoke(messages: list[object]) -> AIMessage:
+            call_order.append(node_name)
+            return AIMessage(content=content)
+
+        llm.invoke.side_effect = invoke
+        return llm
+
+    # critique's response never contains "yes", so the real condition function
+    # (tests.support.routing:by_last_message_content) would loop back to draft
+    # forever without the cap.
+    mock_init_chat_model.side_effect = [
+        make_llm("draft", "here's a draft"),
+        make_llm("critique", "not good enough, try again"),
+    ]
+    schema = _make_capped_reflection_schema(max_visits=2)
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="write something")]})
+
+    assert call_order == ["draft", "critique", "draft", "critique"]
+    assert result["messages"][-1].content == "not good enough, try again"
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_max_visits_does_not_interfere_before_the_cap_is_reached(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    responses = iter(["not good enough", "yes, ship it"])
+    call_order: list[str] = []
+
+    def make_llm(node_name: str) -> MagicMock:
+        llm = MagicMock()
+
+        def invoke(messages: list[object]) -> AIMessage:
+            call_order.append(node_name)
+            if node_name == "critique":
+                return AIMessage(content=next(responses))
+            return AIMessage(content="a draft")
+
+        llm.invoke.side_effect = invoke
+        return llm
+
+    mock_init_chat_model.side_effect = [make_llm("draft"), make_llm("critique")]
+    schema = _make_capped_reflection_schema(max_visits=5)
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="write something")]})
+
+    # The real condition approved on its own (2nd critique) well before the
+    # cap of 5 - the fallback never had to kick in.
+    assert call_order == ["draft", "critique", "draft", "critique"]
+    assert result["messages"][-1].content == "yes, ship it"
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_explain_schema_shows_max_visits_and_fallback(mock_init_chat_model: MagicMock) -> None:
+    mock_init_chat_model.return_value = MagicMock()
+    schema = _make_capped_reflection_schema(max_visits=2)
+
+    text = explain_schema(schema)
+
+    assert (
+        "  - critique -[tests.support.routing:by_last_message_content]-> "
+        "{negative -> draft, positive -> END} (max_visits: 2, fallback: positive)"
+    ) in text
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_max_visits_wraps_a_handler_node_too(mock_init_chat_model: MagicMock) -> None:
+    schema = Schema(
+        schema_version=1,
+        nodes=[Node(id="loop_node", handler="tests.support.handlers:uppercase_last_message")],
+        edges=[
+            Edge(from_="START", to="loop_node"),
+            Edge(
+                from_="loop_node",
+                condition="tests.support.routing:by_last_message_content",
+                routes={"negative": "loop_node", "positive": "END"},
+                max_visits=2,
+                fallback="positive",
+            ),
+        ],
+    )
+
+    graph = compile_schema(schema)
+    result = graph.invoke({"messages": [HumanMessage(content="go")]})
+
+    mock_init_chat_model.assert_not_called()  # purely a handler node, no LLM involved
+    # Uppercasing "go" is already stable, so without the cap this would loop forever.
+    assert result["messages"][-1].content == "GO"
+    assert sum(1 for m in result["messages"] if m.content == "GO") == 2
+
+
 @patch("agentdraft.compiler.init_chat_model")
 def test_conditional_edge_with_unresolvable_condition_raises_compile_error(
     mock_init_chat_model: MagicMock,
@@ -361,8 +488,24 @@ def test_schema_structure_synthesizes_start_end_for_implicit_single_node() -> No
         }
     ]
     assert structure["edges"] == [
-        {"from": "START", "kind": "direct", "to": "chat", "condition": None, "routes": None},
-        {"from": "chat", "kind": "direct", "to": "END", "condition": None, "routes": None},
+        {
+            "from": "START",
+            "kind": "direct",
+            "to": "chat",
+            "condition": None,
+            "routes": None,
+            "max_visits": None,
+            "fallback": None,
+        },
+        {
+            "from": "chat",
+            "kind": "direct",
+            "to": "END",
+            "condition": None,
+            "routes": None,
+            "max_visits": None,
+            "fallback": None,
+        },
     ]
 
 
@@ -384,6 +527,8 @@ def test_schema_structure_covers_tools_handler_and_conditional_routing() -> None
                 from_="router",
                 condition="tests.support.routing:by_last_message_content",
                 routes={"positive": "search", "negative": "shout"},
+                max_visits=3,
+                fallback="negative",
             ),
             Edge(from_="search", to="shout"),
             Edge(from_="shout", to="END"),
@@ -406,6 +551,12 @@ def test_schema_structure_covers_tools_handler_and_conditional_routing() -> None
     assert conditional["from"] == "router"
     assert conditional["condition"] == "tests.support.routing:by_last_message_content"
     assert conditional["routes"] == {"positive": "search", "negative": "shout"}
+    assert conditional["max_visits"] == 3
+    assert conditional["fallback"] == "negative"
+
+    direct = next(edge for edge in structure["edges"] if edge["kind"] == "direct")
+    assert direct["max_visits"] is None
+    assert direct["fallback"] is None
 
 
 def test_schema_from_structure_is_the_inverse_of_schema_structure() -> None:
@@ -428,6 +579,8 @@ def test_schema_from_structure_is_the_inverse_of_schema_structure() -> None:
                 from_="router",
                 condition="tests.support.routing:by_last_message_content",
                 routes={"positive": "search", "negative": "shout"},
+                max_visits=3,
+                fallback="negative",
             ),
             Edge(from_="search", to="shout"),
             Edge(from_="shout", to="END"),

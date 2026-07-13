@@ -58,6 +58,8 @@ class Edge(BaseModel):
     to: str | None = None
     condition: str | None = None
     routes: dict[str, str] | None = None
+    max_visits: int | None = None
+    fallback: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -78,6 +80,28 @@ class Edge(BaseModel):
                 f"edges: conditional edge from {self.from_!r} requires both "
                 "'condition' and a non-empty 'routes' mapping"
             )
+        if self.max_visits is not None or self.fallback is not None:
+            if not is_conditional:
+                raise ValueError(
+                    f"edges: edge from {self.from_!r} sets 'max_visits'/'fallback' - these only "
+                    "apply to a conditional edge ('condition' + 'routes')"
+                )
+            if self.max_visits is None or self.fallback is None:
+                raise ValueError(
+                    f"edges: conditional edge from {self.from_!r} sets one of "
+                    "'max_visits'/'fallback' without the other - both are required together"
+                )
+            if self.max_visits < 1:
+                raise ValueError(
+                    f"edges: edge from {self.from_!r}.max_visits must be a positive integer, "
+                    f"got {self.max_visits!r}"
+                )
+            assert self.routes is not None  # enforced by the conditional-edge check above
+            if self.fallback not in self.routes:
+                raise ValueError(
+                    f"edges: edge from {self.from_!r}.fallback {self.fallback!r} is not a key "
+                    "in its 'routes' mapping"
+                )
         return self
 
 
@@ -195,13 +219,16 @@ def dump_schema(schema: Schema) -> dict[str, Any]:
     if schema.edges:
         edges: list[dict[str, Any]] = []
         for edge in schema.edges:
-            entry = {"from": edge.from_}
+            edge_entry: dict[str, Any] = {"from": edge.from_}
             if edge.to is not None:
-                entry["to"] = edge.to
+                edge_entry["to"] = edge.to
             else:
-                entry["condition"] = edge.condition
-                entry["routes"] = dict(edge.routes or {})
-            edges.append(entry)
+                edge_entry["condition"] = edge.condition
+                edge_entry["routes"] = dict(edge.routes or {})
+                if edge.max_visits is not None:
+                    edge_entry["max_visits"] = edge.max_visits
+                    edge_entry["fallback"] = edge.fallback
+            edges.append(edge_entry)
         result["edges"] = edges
 
     return result

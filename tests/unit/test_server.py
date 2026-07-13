@@ -104,6 +104,23 @@ def test_post_save_writes_valid_edit_to_disk(running_server: tuple[str, Path]) -
     assert reloaded.nodes[0].llm.model == "claude-opus-4-8"
 
 
+def test_post_save_round_trips_max_visits_and_fallback(running_server: tuple[str, Path]) -> None:
+    base_url, schema_path = running_server
+    _, graph = _get(f"{base_url}/api/graph")
+    conditional = next(e for e in graph["edges"] if e["kind"] == "conditional")  # type: ignore[index]
+    conditional["max_visits"] = 3
+    conditional["fallback"] = "negative"
+
+    status, body = _post(f"{base_url}/api/save", graph)
+
+    assert status == 200
+    assert body == {"ok": True}
+    reloaded = load_schema(schema_path)
+    saved_edge = next(e for e in reloaded.edges if e.condition is not None)
+    assert saved_edge.max_visits == 3
+    assert saved_edge.fallback == "negative"
+
+
 def test_post_save_rejects_invalid_edit_and_leaves_file_unchanged(
     running_server: tuple[str, Path],
 ) -> None:

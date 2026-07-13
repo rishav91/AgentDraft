@@ -3,7 +3,8 @@
 Phase 1 scope: multiple nodes wired by explicit `edges` (FR-1.1); per-node tool
 bindings compiled to LangGraph's own `ToolNode`/`tools_condition` primitives
 (FR-1.4); conditional edges, whose routing function is a custom-code
-reference resolved at compile time (FR-1.5, `ADR-004`); and custom-code nodes,
+reference resolved at compile time (FR-1.5, `ADR-004`), optionally capped via
+`max_visits`/`fallback` to bound a self-loop (FR-1.12); and custom-code nodes,
 whose `handler` reference replaces `llm` as the node's entire LangGraph node
 function (FR-1.6, FR-2.2, `ADR-004`). A schema with one node and no edges
 compiles to the Phase 0 straight line START -> node -> END.
@@ -30,8 +31,18 @@ class CompileError(Exception):
     """Raised when a structurally valid schema fails to compile."""
 
 
+def _sum_visit_counts(current: dict[str, int], update: dict[str, int]) -> dict[str, int]:
+    merged = dict(current)
+    for node_id, count in update.items():
+        merged[node_id] = merged.get(node_id, 0) + count
+    return merged
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
+    # Per-node execution counts, only populated for nodes whose outgoing conditional
+    # edge sets `max_visits` (FR-1.12) - absent from every other schema's state.
+    edge_visits: Annotated[dict[str, int], _sum_visit_counts]
 
 
 def _resolve(node_ref: str) -> str:
@@ -56,11 +67,11 @@ def _resolve_handler(ref: str, *, context: str) -> Any:
         raise CompileError(f"{context}: {exc}") from exc
 
 
-def _make_llm_node(node: Node, llm: Any) -> Callable[[AgentState], AgentState]:
+def _make_llm_node(node: Node, llm: Any) -> Callable[[AgentState], dict[str, Any]]:
     assert node.llm is not None  # enforced by Schema validation
     system = node.llm.system
 
-    def run_node(state: AgentState) -> AgentState:
+    def run_node(state: AgentState) -> dict[str, Any]:
         messages = state["messages"]
         if system is not None:
             messages = [SystemMessage(content=system), *messages]
@@ -70,14 +81,55 @@ def _make_llm_node(node: Node, llm: Any) -> Callable[[AgentState], AgentState]:
     return run_node
 
 
+def _with_visit_tracking(
+    node_id: str, fn: Callable[[AgentState], dict[str, Any]]
+) -> Callable[[AgentState], dict[str, Any]]:
+    """Wrap NODE_ID's node function to also record its own execution count
+    (`FR-1.12`), for a conditional edge on this node whose `max_visits` needs it.
+    """
+
+    def wrapped(state: AgentState) -> dict[str, Any]:
+        result = dict(fn(state))
+        result["edge_visits"] = {node_id: 1}
+        return result
+
+    return wrapped
+
+
+def _make_capped_condition(
+    node_id: str,
+    condition_fn: Callable[[AgentState], str],
+    max_visits: int,
+    fallback: str,
+) -> Callable[[AgentState], str]:
+    """Force FALLBACK once NODE_ID has executed MAX_VISITS times, instead of
+    evaluating the real CONDITION_FN again (`FR-1.12`) - bounds a self-loop
+    (e.g. a reflection/self-correction cycle) without hand-written counting
+    logic in the schema author's own condition function.
+    """
+
+    def wrapped(state: AgentState) -> str:
+        visits = state.get("edge_visits", {}).get(node_id, 0)
+        if visits >= max_visits:
+            return fallback
+        return condition_fn(state)
+
+    return wrapped
+
+
 def compile_schema(schema: Schema) -> CompiledStateGraph:
     """Translate a validated schema into a compiled LangGraph StateGraph."""
     graph = StateGraph(AgentState)
     tool_node_names: dict[str, str] = {}
+    # Nodes whose outgoing conditional edge caps its self-loop (FR-1.12) - only
+    # these need their node function wrapped to record its own execution count.
+    capped_sources = {edge.from_ for edge in schema.edges if edge.max_visits is not None}
 
     for node in schema.nodes:
         if node.handler is not None:
             handler_fn = _resolve_handler(node.handler, context=f"nodes[{node.id!r}].handler")
+            if node.id in capped_sources:
+                handler_fn = _with_visit_tracking(node.id, handler_fn)
             graph.add_node(node.id, handler_fn)
             continue
 
@@ -89,7 +141,10 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
             raise CompileError(f"nodes[{node.id!r}].llm: {exc}") from exc
         if tools:
             llm = llm.bind_tools(tools)
-        graph.add_node(node.id, _make_llm_node(node, llm))
+        llm_node_fn: Callable[[AgentState], dict[str, Any]] = _make_llm_node(node, llm)
+        if node.id in capped_sources:
+            llm_node_fn = _with_visit_tracking(node.id, llm_node_fn)
+        graph.add_node(node.id, llm_node_fn)
 
         if tools:
             tool_node_name = f"{node.id}__tools"
@@ -130,6 +185,11 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
             condition_ref = edge.condition
             assert condition_ref is not None  # enforced by Schema validation
             condition_fn = _resolve_handler(condition_ref, context=f"edges[{source!r}].condition")
+            if edge.max_visits is not None:
+                assert edge.fallback is not None  # enforced by Schema validation
+                condition_fn = _make_capped_condition(
+                    source, condition_fn, edge.max_visits, edge.fallback
+                )
             graph.add_conditional_edges(
                 source,
                 condition_fn,
@@ -182,7 +242,15 @@ def schema_structure(schema: Schema) -> dict[str, Any]:
 
     edges: list[dict[str, Any]] = []
     def _direct(source: str, target: str) -> dict[str, Any]:
-        return {"from": source, "kind": "direct", "to": target, "condition": None, "routes": None}
+        return {
+            "from": source,
+            "kind": "direct",
+            "to": target,
+            "condition": None,
+            "routes": None,
+            "max_visits": None,
+            "fallback": None,
+        }
 
     if not schema.edges:
         only_node = schema.nodes[0]
@@ -198,6 +266,8 @@ def schema_structure(schema: Schema) -> dict[str, Any]:
                         "to": None,
                         "condition": edge.condition,
                         "routes": dict(edge.routes or {}),
+                        "max_visits": edge.max_visits,
+                        "fallback": edge.fallback,
                     }
                 )
             else:
@@ -248,7 +318,10 @@ def explain_schema(schema: Schema) -> str:
     for edge in structure["edges"]:
         if edge["kind"] == "conditional":
             routes = ", ".join(f"{key} -> {target}" for key, target in edge["routes"].items())
-            lines.append(f"  - {edge['from']} -[{edge['condition']}]-> {{{routes}}}")
+            line = f"  - {edge['from']} -[{edge['condition']}]-> {{{routes}}}"
+            if edge["max_visits"] is not None:
+                line += f" (max_visits: {edge['max_visits']}, fallback: {edge['fallback']})"
+            lines.append(line)
         else:
             lines.append(f"  - {edge['from']} -> {edge['to']}")
 

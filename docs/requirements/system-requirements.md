@@ -20,6 +20,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-1.9 | Schema expresses multi-agent/subgraph composition | P2 — deferred | Out of scope for Phase 1 |
 | FR-1.10 | Schema includes a required `schema_version` field identifying the AgentDraft schema format version it targets (`ADR-006`) | P0 | Phase 1 schemas declare `schema_version: 1`; a missing or unrecognized version fails validation with a specific error naming the expected version, not a generic parse failure |
 | FR-1.11 | A `Schema` object serializes back to YAML text, the inverse of `load_schema` | P0 | `dump_schema`/`schema_to_yaml` round-trip a loaded schema back to YAML without introducing fields the original didn't use (no `edges:` for an implicit single-node schema, no empty `tools:` on a handler node); the canvas's save path (`FR-4.3`) is built on this |
+| FR-1.12 | A conditional edge may declaratively cap how many times its source node executes before the compiler forces a fallback route, bounding self-loops (e.g. reflection/self-correction cycles) | P1 | A conditional edge may set `max_visits` (positive integer) and `fallback` (a key in `routes`) alongside `condition`/`routes`; both fields required together, `fallback` validated against `routes` at parse time. Once the source node has executed `max_visits` times, the compiler forces the `fallback` route on the next evaluation instead of calling `condition` again - no hand-written counting logic needed in the condition function |
 
 ### FR-2 — Compiler
 

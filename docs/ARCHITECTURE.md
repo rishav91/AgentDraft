@@ -58,7 +58,7 @@ introduced.
 
 ### 4.2 `agentdraft run <schema>`
 1. Parser loads and validates the schema (same as `validate`).
-2. Compiler walks the schema and builds a LangGraph `StateGraph`: one LangGraph node per schema node, edges wired per the schema's routing (including conditional edges), tool bindings attached per node.
+2. Compiler walks the schema and builds a LangGraph `StateGraph`: one LangGraph node per schema node, edges wired per the schema's routing (including conditional edges, which may self-loop back to an earlier node - e.g. a reflection/self-correction cycle - optionally bounded by `max_visits`/`fallback`, `FR-1.12`), tool bindings attached per node.
 3. For any node/edge with a `handler` reference (`FR-1.6`), the custom-code loader resolves and attaches the Python callable in place of declarative config.
 4. The compiled graph is invoked via LangGraph's own execution.
 5. Output streams to stdout as the agent runs.
