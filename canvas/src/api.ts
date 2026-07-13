@@ -64,6 +64,27 @@ export async function fetchCallables(apiBase: string): Promise<string[]> {
   }
 }
 
+// The closed provider list (FR-4.6) - unlike callables, this is a genuinely
+// enumerable set (schema.SUPPORTED_PROVIDERS), so an empty result here means
+// "fall back to free text", not "no suggestions available".
+export async function fetchProviders(apiBase: string): Promise<string[]> {
+  try {
+    const response = await fetch(`${apiBase}/api/providers`);
+    if (!response.ok) return [];
+    const data: unknown = await response.json();
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      Array.isArray((data as Record<string, unknown>).providers)
+    ) {
+      return (data as { providers: unknown[] }).providers.map(String);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 // Read-only source preview for a discovered callable (FR-4.5) - null means
 // "no preview available" (unresolvable ref, network error), never an error
 // state to surface, since the field itself still works as free text either way.

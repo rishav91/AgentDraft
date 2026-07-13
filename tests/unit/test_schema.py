@@ -4,7 +4,14 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from agentdraft.schema import Schema, dump_schema, load_schema, save_schema, schema_to_yaml
+from agentdraft.schema import (
+    SUPPORTED_PROVIDERS,
+    Schema,
+    dump_schema,
+    load_schema,
+    save_schema,
+    schema_to_yaml,
+)
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "skeleton.yaml"
 MULTI_NODE_FIXTURE = Path(__file__).parent.parent / "fixtures" / "multi_node.yaml"
@@ -199,6 +206,18 @@ def test_rejects_node_with_both_llm_and_handler() -> None:
 def test_rejects_node_with_neither_llm_nor_handler() -> None:
     with pytest.raises(ValidationError, match="sets neither 'llm' nor 'handler'"):
         Schema.model_validate({"schema_version": 1, "nodes": [{"id": "chat"}]})
+
+
+def test_supported_providers_matches_what_validation_accepts() -> None:
+    assert "anthropic" in SUPPORTED_PROVIDERS
+    assert SUPPORTED_PROVIDERS == sorted(SUPPORTED_PROVIDERS)
+    for provider in SUPPORTED_PROVIDERS:
+        Schema.model_validate(
+            {
+                "schema_version": 1,
+                "nodes": [{"id": "chat", "llm": {"provider": provider, "model": "x"}}],
+            }
+        )
 
 
 def test_schema_to_yaml_round_trips_comprehensive_fixture() -> None:

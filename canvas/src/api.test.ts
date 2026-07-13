@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchCallableSource, fetchCallables } from "./api";
+import { fetchCallableSource, fetchCallables, fetchProviders } from "./api";
 
 function mockFetch(response: Partial<Response> & { json?: () => Promise<unknown> }) {
   vi.stubGlobal(
@@ -36,6 +36,32 @@ describe("fetchCallables", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
     expect(await fetchCallables("http://api")).toEqual([]);
+  });
+});
+
+describe("fetchProviders", () => {
+  it("returns the supported provider list on success", async () => {
+    mockFetch({ json: () => Promise.resolve({ providers: ["anthropic", "openai"] }) });
+
+    expect(await fetchProviders("http://api")).toEqual(["anthropic", "openai"]);
+  });
+
+  it("returns an empty list on a non-ok response", async () => {
+    mockFetch({ ok: false, status: 500 });
+
+    expect(await fetchProviders("http://api")).toEqual([]);
+  });
+
+  it("returns an empty list on an unexpected response shape", async () => {
+    mockFetch({ json: () => Promise.resolve({ nonsense: true }) });
+
+    expect(await fetchProviders("http://api")).toEqual([]);
+  });
+
+  it("returns an empty list if the request throws", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    expect(await fetchProviders("http://api")).toEqual([]);
   });
 });
 

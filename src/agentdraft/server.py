@@ -16,7 +16,12 @@ from pydantic import ValidationError
 
 from agentdraft.compiler import schema_from_structure, schema_structure
 from agentdraft.discovery import discover_callables, get_callable_source
-from agentdraft.schema import format_validation_errors, load_schema, save_schema
+from agentdraft.schema import (
+    SUPPORTED_PROVIDERS,
+    format_validation_errors,
+    load_schema,
+    save_schema,
+)
 
 
 def _handler_for(
@@ -40,6 +45,9 @@ def _handler_for(
 
         def do_GET(self) -> None:
             parsed = urlsplit(self.path)
+            if parsed.path == "/api/providers":
+                self._write_json(200, {"providers": SUPPORTED_PROVIDERS})
+                return
             if parsed.path == "/api/callables":
                 self._write_json(200, {"callables": discover_callables(import_root, scan_dirs)})
                 return

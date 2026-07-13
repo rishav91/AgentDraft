@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agentdraft.schema import load_schema
+from agentdraft.schema import SUPPORTED_PROVIDERS, load_schema
 from agentdraft.server import create_server, run_canvas_server
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "comprehensive.yaml"
@@ -59,6 +59,17 @@ def test_get_graph_returns_schema_structure(running_server: tuple[str, Path]) ->
     assert status == 200
     assert body["schema_version"] == 1
     assert [n["id"] for n in body["nodes"]] == ["router", "search", "shout"]  # type: ignore[index]
+
+
+def test_get_providers_returns_the_supported_provider_list(
+    running_server: tuple[str, Path],
+) -> None:
+    base_url, _ = running_server
+
+    status, body = _get(f"{base_url}/api/providers")
+
+    assert status == 200
+    assert body == {"providers": SUPPORTED_PROVIDERS}
 
 
 def test_get_unknown_route_is_404(running_server: tuple[str, Path]) -> None:

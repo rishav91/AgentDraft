@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { Connection } from "@xyflow/react";
 
-import { fetchCallables, saveGraph } from "./api";
+import { fetchCallables, fetchProviders, saveGraph } from "./api";
 import {
   addDirectTarget,
   addNode,
@@ -28,9 +28,11 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [callables, setCallables] = useState<string[]>([]);
+  const [providers, setProviders] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCallables(apiBase).then(setCallables);
+    fetchProviders(apiBase).then(setProviders);
   }, [apiBase]);
 
   const mutate = (next: GraphStructure) => {
@@ -125,6 +127,7 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
             nodeId={selectedNodeId}
             apiBase={apiBase}
             callables={callables}
+            providers={providers}
             onUpdateNode={handleUpdateNode}
             onRemoveNode={handleRemoveNode}
             onSetOutgoingDirect={handleSetOutgoingDirect}

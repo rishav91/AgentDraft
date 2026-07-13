@@ -82,7 +82,7 @@ test("add a node, wire an edge, save, and confirm it persists to disk", async ({
   const idInput = page.locator(".inspector input").first();
   await idInput.fill("responder");
   await idInput.blur();
-  await page.fill('.inspector__field:has(label:text("provider")) input', "anthropic");
+  await page.selectOption('.inspector__field:has(label:text("provider")) select', "anthropic");
   await page.fill('.inspector__field:has(label:text("model")) input', "claude-sonnet-5");
   await page.click('button:has-text("+ add direct edge")');
 

@@ -9,6 +9,7 @@ type InspectorProps = {
   nodeId: string;
   apiBase: string;
   callables: string[];
+  providers: string[];
   onUpdateNode: (patch: Partial<GraphNode>) => void;
   onRemoveNode: () => void;
   onSetOutgoingDirect: (targets: string[]) => void;
@@ -23,6 +24,7 @@ export function Inspector({
   nodeId,
   apiBase,
   callables,
+  providers,
   onUpdateNode,
   onRemoveNode,
   onSetOutgoingDirect,
@@ -112,12 +114,37 @@ export function Inspector({
         <>
           <div className="inspector__field">
             <label>provider</label>
-            <input
-              value={node.llm?.provider ?? ""}
-              onChange={(e) =>
-                onUpdateNode({ llm: { ...(node.llm ?? { model: "", system: null }), provider: e.target.value } })
-              }
-            />
+            {providers.length > 0 ? (
+              <select
+                value={node.llm?.provider ?? ""}
+                onChange={(e) =>
+                  onUpdateNode({
+                    llm: { ...(node.llm ?? { model: "", system: null }), provider: e.target.value },
+                  })
+                }
+              >
+                <option value="" disabled>
+                  select a provider…
+                </option>
+                {providers.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+                {node.llm?.provider && !providers.includes(node.llm.provider) && (
+                  <option value={node.llm.provider}>{node.llm.provider} (unrecognized)</option>
+                )}
+              </select>
+            ) : (
+              <input
+                value={node.llm?.provider ?? ""}
+                onChange={(e) =>
+                  onUpdateNode({
+                    llm: { ...(node.llm ?? { model: "", system: null }), provider: e.target.value },
+                  })
+                }
+              />
+            )}
           </div>
           <div className="inspector__field">
             <label>model</label>

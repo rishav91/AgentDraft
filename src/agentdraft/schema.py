@@ -14,6 +14,11 @@ import yaml
 from langchain.chat_models.base import _SUPPORTED_PROVIDERS
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+# Sorted, public re-export of the same set _check_providers validates against
+# (FR-1.3, ADR-005) - the canvas's provider dropdown reads this (FR-4.6) so it
+# can never drift from what a save would actually accept.
+SUPPORTED_PROVIDERS = sorted(_SUPPORTED_PROVIDERS)
+
 SUPPORTED_SCHEMA_VERSION = 1
 START = "START"
 END = "END"
