@@ -15,8 +15,24 @@ const SIMPLE: GraphStructure = {
     },
   ],
   edges: [
-    { from: "START", kind: "direct", to: "chat", condition: null, routes: null },
-    { from: "chat", kind: "direct", to: "END", condition: null, routes: null },
+    {
+      from: "START",
+      kind: "direct",
+      to: "chat",
+      condition: null,
+      routes: null,
+      max_visits: null,
+      fallback: null,
+    },
+    {
+      from: "chat",
+      kind: "direct",
+      to: "END",
+      condition: null,
+      routes: null,
+      max_visits: null,
+      fallback: null,
+    },
   ],
 };
 
@@ -40,16 +56,66 @@ const COMPREHENSIVE: GraphStructure = {
     { id: "shout", kind: "handler", llm: null, handler: "tests.support.handlers:uppercase", tools: [] },
   ],
   edges: [
-    { from: "START", kind: "direct", to: "router", condition: null, routes: null },
+    {
+      from: "START",
+      kind: "direct",
+      to: "router",
+      condition: null,
+      routes: null,
+      max_visits: null,
+      fallback: null,
+    },
     {
       from: "router",
       kind: "conditional",
       to: null,
       condition: "tests.support.routing:by_last_message_content",
       routes: { positive: "search", negative: "shout" },
+      max_visits: null,
+      fallback: null,
     },
-    { from: "search", kind: "direct", to: "shout", condition: null, routes: null },
-    { from: "shout", kind: "direct", to: "END", condition: null, routes: null },
+    {
+      from: "search",
+      kind: "direct",
+      to: "shout",
+      condition: null,
+      routes: null,
+      max_visits: null,
+      fallback: null,
+    },
+    {
+      from: "shout",
+      kind: "direct",
+      to: "END",
+      condition: null,
+      routes: null,
+      max_visits: null,
+      fallback: null,
+    },
+  ],
+};
+
+const CAPPED_LOOP: GraphStructure = {
+  schema_version: 1,
+  nodes: [
+    {
+      id: "critique",
+      kind: "llm",
+      llm: { provider: "anthropic", model: "claude-sonnet-5", system: null },
+      handler: null,
+      tools: [],
+    },
+  ],
+  edges: [
+    {
+      from: "critique",
+      kind: "conditional",
+      to: null,
+      condition: "pkg:verdict",
+      routes: { revise: "critique", good: "END" },
+      max_visits: 3,
+      fallback: "good",
+    },
   ],
 };
 
@@ -120,5 +186,13 @@ describe("layoutGraph", () => {
 
     const ids = edges.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("suffixes only the fallback route's label with the visit cap", () => {
+    const { edges } = layoutGraph(CAPPED_LOOP);
+
+    const byLabel = new Map(edges.map((e) => [e.target === "END" ? "good" : "revise", e.label]));
+    expect(byLabel.get("good")).toBe("good (after 3)");
+    expect(byLabel.get("revise")).toBe("revise");
   });
 });

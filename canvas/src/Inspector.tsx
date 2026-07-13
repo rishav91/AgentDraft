@@ -13,7 +13,12 @@ type InspectorProps = {
   onUpdateNode: (patch: Partial<GraphNode>) => void;
   onRemoveNode: () => void;
   onSetOutgoingDirect: (targets: string[]) => void;
-  onSetOutgoingConditional: (condition: string, routes: Record<string, string>) => void;
+  onSetOutgoingConditional: (
+    condition: string,
+    routes: Record<string, string>,
+    maxVisits: number | null,
+    fallback: string | null,
+  ) => void;
 };
 
 const RESERVED_IDS = new Set(["START", "END"]);
@@ -39,6 +44,8 @@ export function Inspector({
   const conditionalEdge = edges.find((edge) => edge.kind === "conditional");
   const condition = conditionalEdge?.condition ?? "";
   const routes = conditionalEdge?.routes ?? {};
+  const maxVisits = conditionalEdge?.max_visits ?? null;
+  const fallback = conditionalEdge?.fallback ?? null;
 
   const [idDraft, setIdDraft] = useState(nodeId);
   const [idError, setIdError] = useState<string | null>(null);
@@ -55,7 +62,9 @@ export function Inspector({
   const [cachedConditional, setCachedConditional] = useState<{
     condition: string;
     routes: Record<string, string>;
-  }>({ condition, routes });
+    maxVisits: number | null;
+    fallback: string | null;
+  }>({ condition, routes, maxVisits, fallback });
 
   if (!node) return null;
 
@@ -80,7 +89,7 @@ export function Inspector({
 
   const switchToDirect = () => {
     if (isConditional) {
-      setCachedConditional({ condition, routes });
+      setCachedConditional({ condition, routes, maxVisits, fallback });
     }
     onSetOutgoingDirect(cachedDirectTargets);
   };
@@ -89,7 +98,12 @@ export function Inspector({
     if (!isConditional) {
       setCachedDirectTargets(directTargets);
     }
-    onSetOutgoingConditional(cachedConditional.condition, cachedConditional.routes);
+    onSetOutgoingConditional(
+      cachedConditional.condition,
+      cachedConditional.routes,
+      cachedConditional.maxVisits,
+      cachedConditional.fallback,
+    );
   };
 
   const otherIds = structure.nodes.filter((n) => n.id !== nodeId).map((n) => n.id);
@@ -290,7 +304,7 @@ export function Inspector({
               apiBase={apiBase}
               callables={callables}
               placeholder="module.path:function_name"
-              onChange={(value) => onSetOutgoingConditional(value, routes)}
+              onChange={(value) => onSetOutgoingConditional(value, routes, maxVisits, fallback)}
             />
             {Object.entries(routes).map(([key, target], i) => (
               <div className="inspector__row" key={i}>
@@ -301,13 +315,18 @@ export function Inspector({
                     const updated = Object.fromEntries(
                       Object.entries(routes).map(([k, v]) => [k === key ? e.target.value : k, v]),
                     );
-                    onSetOutgoingConditional(condition, updated);
+                    onSetOutgoingConditional(condition, updated, maxVisits, fallback);
                   }}
                 />
                 <select
                   value={target}
                   onChange={(e) =>
-                    onSetOutgoingConditional(condition, { ...routes, [key]: e.target.value })
+                    onSetOutgoingConditional(
+                      condition,
+                      { ...routes, [key]: e.target.value },
+                      maxVisits,
+                      fallback,
+                    )
                   }
                 >
                   {targetOptions.map((option) => (
@@ -320,7 +339,7 @@ export function Inspector({
                   type="button"
                   onClick={() => {
                     const { [key]: _omit, ...rest } = routes;
-                    onSetOutgoingConditional(condition, rest);
+                    onSetOutgoingConditional(condition, rest, maxVisits, fallback);
                   }}
                 >
                   &times;
@@ -331,14 +350,53 @@ export function Inspector({
               type="button"
               disabled={targetOptions.length === 0}
               onClick={() =>
-                onSetOutgoingConditional(condition, {
-                  ...routes,
-                  [`route_${Object.keys(routes).length + 1}`]: targetOptions[0],
-                })
+                onSetOutgoingConditional(
+                  condition,
+                  { ...routes, [`route_${Object.keys(routes).length + 1}`]: targetOptions[0] },
+                  maxVisits,
+                  fallback,
+                )
               }
             >
               + add route
             </button>
+
+            <div className="inspector__row inspector__loop-cap">
+              <label>
+                max visits
+                <input
+                  type="number"
+                  min={1}
+                  value={maxVisits ?? ""}
+                  placeholder="unbounded"
+                  onChange={(e) => {
+                    const value = e.target.value === "" ? null : Number(e.target.value);
+                    onSetOutgoingConditional(condition, routes, value, fallback);
+                  }}
+                />
+              </label>
+              <label>
+                fallback
+                <select
+                  value={fallback ?? ""}
+                  onChange={(e) =>
+                    onSetOutgoingConditional(
+                      condition,
+                      routes,
+                      maxVisits,
+                      e.target.value === "" ? null : e.target.value,
+                    )
+                  }
+                >
+                  <option value="">unset</option>
+                  {Object.keys(routes).map((key) => (
+                    <option key={key} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </>
         )}
       </div>

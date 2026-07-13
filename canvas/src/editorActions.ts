@@ -110,6 +110,8 @@ export function setOutgoingDirect(
     to: target,
     condition: null,
     routes: null,
+    max_visits: null,
+    fallback: null,
   }));
   return { ...structure, edges: [...otherEdges, ...newEdges] };
 }
@@ -119,9 +121,19 @@ export function setOutgoingConditional(
   nodeId: string,
   condition: string,
   routes: Record<string, string>,
+  maxVisits: number | null = null,
+  fallback: string | null = null,
 ): GraphStructure {
   const otherEdges = structure.edges.filter((edge) => edge.from !== nodeId);
-  const newEdge: GraphEdge = { from: nodeId, kind: "conditional", to: null, condition, routes };
+  const newEdge: GraphEdge = {
+    from: nodeId,
+    kind: "conditional",
+    to: null,
+    condition,
+    routes,
+    max_visits: maxVisits,
+    fallback,
+  };
   return { ...structure, edges: [...otherEdges, newEdge] };
 }
 

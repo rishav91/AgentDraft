@@ -52,7 +52,17 @@ function llmSchema(): GraphStructure {
         tools: [],
       },
     ],
-    edges: [{ from: "chat", kind: "direct", to: "b", condition: null, routes: null }],
+    edges: [
+      {
+        from: "chat",
+        kind: "direct",
+        to: "b",
+        condition: null,
+        routes: null,
+        max_visits: null,
+        fallback: null,
+      },
+    ],
   };
 }
 
@@ -89,6 +99,8 @@ function conditionalSchema(): GraphStructure {
         to: null,
         condition: "pkg:route",
         routes: { positive: "b", negative: "c" },
+        max_visits: null,
+        fallback: null,
       },
     ],
   };
@@ -108,8 +120,10 @@ function TestHarness({ initial, nodeId }: { initial: GraphStructure; nodeId: str
       onUpdateNode={(patch: Partial<GraphNode>) => setStructure(updateNode(structure, nodeId, patch))}
       onRemoveNode={() => setStructure(removeNode(structure, nodeId).structure)}
       onSetOutgoingDirect={(targets) => setStructure(setOutgoingDirect(structure, nodeId, targets))}
-      onSetOutgoingConditional={(condition, routes) =>
-        setStructure(setOutgoingConditional(structure, nodeId, condition, routes))
+      onSetOutgoingConditional={(condition, routes, maxVisits, fallback) =>
+        setStructure(
+          setOutgoingConditional(structure, nodeId, condition, routes, maxVisits, fallback),
+        )
       }
     />
   );
@@ -175,5 +189,62 @@ describe("Inspector - outgoing routing switch caching", () => {
     await user.click(screen.getByRole("radio", { name: "direct" }));
 
     expect(routingField().querySelector("select")).toHaveValue("b");
+  });
+});
+
+describe("Inspector - loop cap (max_visits/fallback)", () => {
+  it("sets max_visits and fallback via the loop-cap inputs", async () => {
+    render(<TestHarness initial={conditionalSchema()} nodeId="router" />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText("max visits"), "3");
+    expect(screen.getByLabelText("max visits")).toHaveValue(3);
+
+    await user.selectOptions(screen.getByLabelText("fallback"), "negative");
+    expect(screen.getByLabelText("fallback")).toHaveValue("negative");
+  });
+
+  it("offers the current routes as fallback options, plus 'unset'", () => {
+    render(<TestHarness initial={conditionalSchema()} nodeId="router" />);
+
+    const fallbackSelect = screen.getByLabelText("fallback") as HTMLSelectElement;
+    const optionValues = Array.from(fallbackSelect.options).map((o) => o.value);
+    expect(optionValues).toEqual(["", "positive", "negative"]);
+  });
+
+  it("preserves max_visits/fallback when a route is renamed", async () => {
+    const schema = conditionalSchema();
+    schema.edges[0] = { ...schema.edges[0], max_visits: 3, fallback: "positive" };
+    render(<TestHarness initial={schema} nodeId="router" />);
+    const user = userEvent.setup();
+
+    expect(screen.getByLabelText("max visits")).toHaveValue(3);
+    // "positive" also appears as a <select> option (the fallback picker), so
+    // narrow to the route-key <input> specifically.
+    const keyInput = screen
+      .getAllByDisplayValue("positive")
+      .find((el): el is HTMLInputElement => el.tagName === "INPUT");
+    if (!keyInput) throw new Error("route key input not found");
+    await user.clear(keyInput);
+    await user.type(keyInput, "renamed");
+
+    expect(screen.getByLabelText("max visits")).toHaveValue(3);
+    // fallback still points at the (now-stale) key 'positive' - renaming a
+    // route doesn't cascade into fallback, matching how direct-edge target
+    // renames are handled elsewhere: surfaced as a save-time validation
+    // error (FR-4.4), not silently auto-fixed.
+  });
+
+  it("restores max_visits/fallback after switching to direct and back", async () => {
+    const schema = conditionalSchema();
+    schema.edges[0] = { ...schema.edges[0], max_visits: 5, fallback: "negative" };
+    render(<TestHarness initial={schema} nodeId="router" />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("radio", { name: "direct" }));
+    await user.click(screen.getByRole("radio", { name: "conditional" }));
+
+    expect(screen.getByLabelText("max visits")).toHaveValue(5);
+    expect(screen.getByLabelText("fallback")).toHaveValue("negative");
   });
 });

@@ -55,13 +55,14 @@ export function layoutGraph(structure: GraphStructure): {
       });
     } else if (edge.kind === "conditional" && edge.routes) {
       for (const [routeKey, target] of Object.entries(edge.routes)) {
+        const isCappedFallback = edge.max_visits != null && routeKey === edge.fallback;
         graph.setEdge(edge.from, target);
         edges.push({
           id: `e${edgeCounter++}`,
           source: edge.from,
           target,
           type: "smoothstep",
-          label: routeKey,
+          label: isCappedFallback ? `${routeKey} (after ${edge.max_visits})` : routeKey,
           data: { condition: edge.condition ?? "" },
           style: { strokeDasharray: "5 5" },
           markerEnd: ARROW_MARKER,

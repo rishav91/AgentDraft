@@ -22,6 +22,8 @@ export type GraphEdge = {
   to: string | null;
   condition: string | null;
   routes: Record<string, string> | null;
+  max_visits: number | null;
+  fallback: string | null;
 };
 
 export type GraphStructure = {

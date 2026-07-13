@@ -72,9 +72,16 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
     mutate(setOutgoingDirect(structure, selectedNodeId, targets));
   };
 
-  const handleSetOutgoingConditional = (condition: string, routes: Record<string, string>) => {
+  const handleSetOutgoingConditional = (
+    condition: string,
+    routes: Record<string, string>,
+    maxVisits: number | null,
+    fallback: string | null,
+  ) => {
     if (!selectedNodeId) return;
-    mutate(setOutgoingConditional(structure, selectedNodeId, condition, routes));
+    mutate(
+      setOutgoingConditional(structure, selectedNodeId, condition, routes, maxVisits, fallback),
+    );
   };
 
   const handleSave = async () => {

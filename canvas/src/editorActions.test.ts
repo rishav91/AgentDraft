@@ -34,16 +34,42 @@ function schema(): GraphStructure {
       { id: "shout", kind: "handler", llm: null, handler: "pkg:fn", tools: [] },
     ],
     edges: [
-      { from: "START", kind: "direct", to: "router", condition: null, routes: null },
+      {
+        from: "START",
+        kind: "direct",
+        to: "router",
+        condition: null,
+        routes: null,
+        max_visits: null,
+        fallback: null,
+      },
       {
         from: "router",
         kind: "conditional",
         to: null,
         condition: "pkg:route",
         routes: { positive: "search", negative: "shout" },
+        max_visits: null,
+        fallback: null,
       },
-      { from: "search", kind: "direct", to: "shout", condition: null, routes: null },
-      { from: "shout", kind: "direct", to: "END", condition: null, routes: null },
+      {
+        from: "search",
+        kind: "direct",
+        to: "shout",
+        condition: null,
+        routes: null,
+        max_visits: null,
+        fallback: null,
+      },
+      {
+        from: "shout",
+        kind: "direct",
+        to: "END",
+        condition: null,
+        routes: null,
+        max_visits: null,
+        fallback: null,
+      },
     ],
   };
 }
@@ -97,7 +123,18 @@ describe("removeNode", () => {
           tools: [],
         },
       ],
-      edges: [...schema().edges, { from: "orphan", kind: "direct", to: "END", condition: null, routes: null }],
+      edges: [
+        ...schema().edges,
+        {
+          from: "orphan",
+          kind: "direct",
+          to: "END",
+          condition: null,
+          routes: null,
+          max_visits: null,
+          fallback: null,
+        },
+      ],
     };
 
     const { structure, cleanups } = removeNode(withOrphan, "orphan");

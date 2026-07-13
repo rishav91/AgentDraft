@@ -335,6 +335,24 @@ body {
   color: var(--muted);
 }
 
+.inspector__loop-cap {
+  margin-top: 0.5rem;
+}
+
+.inspector__loop-cap label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex: 1;
+}
+
+.inspector__loop-cap input,
+.inspector__loop-cap select {
+  font-size: 0.9rem;
+}
+
 .inspector__error {
   color: #dc2626;
   margin: 0;
