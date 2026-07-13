@@ -50,4 +50,4 @@ source = ["agentdraft"]
 
 [tool.coverage.report]
 fail_under = 99
-exclude_lines = ["if __name__ == .__main__.:"]
+exclude_lines = ["if __name__ == .__main__.:", "pragma: no cover"]

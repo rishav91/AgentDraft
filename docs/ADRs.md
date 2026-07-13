@@ -14,6 +14,7 @@ Referenced by ID (`ADR-00N`) from other docs.
 | [ADR-005](#adr-005--llm-provider-agnostic-config) | LLM provider-agnostic config | Accepted |
 | [ADR-006](#adr-006--schema-versioning) | Schema versioning | Accepted |
 | [ADR-007](#adr-007--canvas-frontend-stack-and-data-interface) | Canvas frontend stack and data interface | Accepted |
+| [ADR-008](#adr-008--canvas-write-back-a-local-api-server) | Canvas write-back: a local API server | Accepted |
 
 ---
 
@@ -242,3 +243,46 @@ resolves that deferred boundary now that Phase 2 planning has started, scoped to
   — explicitly deferred, not solved here.
 - `−` Two runtimes (Python and Node/TypeScript) now exist in the repo, each with its own
   dependency and build tooling — the anticipated cost `ADR-002` accepted in advance.
+
+---
+
+## ADR-008 — Canvas write-back: a local API server
+
+**Context.** `ADR-007` deferred exactly this question: 2.1's static-JSON, no-backend-process
+model works for read-only viewing, but 2.2 (editing) needs a way for canvas changes to reach the
+schema file on disk. `Schema`'s validation rules (`schema.py`) are non-trivial and will keep
+growing (memory config `FR-1.7`, sandboxing `FR-1.8`, multi-agent composition `FR-1.9` are all
+still coming per [PRD](PRD.md)) — whatever write-back mechanism is chosen either reuses those
+rules or re-implements a second copy of them.
+
+**Decision.** `agentdraft canvas <schema>` starts a small local HTTP server (Python stdlib
+`http.server.ThreadingHTTPServer`, no new dependency), bound to `127.0.0.1` only, no
+authentication (`NFR-4.2`). It exposes `GET /api/graph` (current `schema_structure`, reloaded
+from disk each call) and `POST /api/save` (`FR-4.3`): the request body is parsed via
+`schema_from_structure` directly into the same `Node`/`Edge`/`Schema` pydantic models
+`load_schema` uses, so every existing validation rule applies for free with zero duplicated
+logic; a valid save is written via `save_schema` (`FR-1.11`), an invalid one returns HTTP 422
+with the same field-specific error text the CLI prints (`format_validation_errors`, `FR-4.4`,
+`NFR-2.1`). The server only runs for the duration of an editing session — 2.1's plain viewing
+still needs nothing running (`ADR-007` unchanged for that path).
+
+**Alternatives.**
+- **Browser File System Access API.** Rejected: keeps `ADR-007`'s "no server" invariant fully
+  intact, but means re-implementing `Schema`'s validation and YAML round-tripping in TypeScript —
+  a second copy of rules that will drift from `schema.py` as the schema format grows. Also
+  Chromium-only, a portability constraint the local-server option doesn't have.
+- **Manual export/download, hand-overwrite the file.** Rejected: simplest to build, but barely
+  qualifies as "write the changes back to the schema" (ROADMAP 2.2's own wording) and is a rough,
+  easy-to-fumble UX for a tool whose pitch is making iteration faster, not slower.
+
+**Consequences.**
+- `+` Zero duplicated validation logic — the local server is a thin transport wrapper around
+  functions the CLI already has (`schema_from_structure`, `save_schema`, `format_validation_errors`).
+- `+` Canvas-reported save errors are guaranteed to match CLI-reported ones for the same invalid
+  input, since both paths run through the same pydantic models.
+- `−` Reintroduces a running backend process, but scoped to editing sessions only — a narrower
+  reversal of `ADR-007` than making 2.1's viewing mode depend on a server too.
+- `−` No authentication (`NFR-4.2`): any local process can read and overwrite the schema file
+  while the server runs. Accepted under the same trust boundary the custom-code escape hatch
+  already established (`NFR-4.1`) — local-only, single-user, the schema author already has full
+  local code execution regardless.

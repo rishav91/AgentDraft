@@ -2,8 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import ValidationError
 
-from agentdraft.compiler import CompileError, compile_schema, schema_structure
+from agentdraft.compiler import (
+    CompileError,
+    compile_schema,
+    schema_from_structure,
+    schema_structure,
+)
 from agentdraft.schema import Edge, LLMConfig, Node, Schema
 
 
@@ -400,3 +406,63 @@ def test_schema_structure_covers_tools_handler_and_conditional_routing() -> None
     assert conditional["from"] == "router"
     assert conditional["condition"] == "tests.support.routing:by_last_message_content"
     assert conditional["routes"] == {"positive": "search", "negative": "shout"}
+
+
+def test_schema_from_structure_is_the_inverse_of_schema_structure() -> None:
+    schema = Schema(
+        schema_version=1,
+        nodes=[
+            Node(id="router", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5")),
+            Node(
+                id="search",
+                llm=LLMConfig(
+                    provider="anthropic", model="claude-sonnet-5", system="be terse"
+                ),
+                tools=["tests.support.tools:echo"],
+            ),
+            Node(id="shout", handler="tests.support.handlers:uppercase_last_message"),
+        ],
+        edges=[
+            Edge(from_="START", to="router"),
+            Edge(
+                from_="router",
+                condition="tests.support.routing:by_last_message_content",
+                routes={"positive": "search", "negative": "shout"},
+            ),
+            Edge(from_="search", to="shout"),
+            Edge(from_="shout", to="END"),
+        ],
+    )
+
+    assert schema_from_structure(schema_structure(schema)) == schema
+
+
+def test_schema_from_structure_synthesized_start_end_round_trips_to_no_edges() -> None:
+    schema = Schema(
+        schema_version=1,
+        nodes=[Node(id="chat", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5"))],
+    )
+
+    rebuilt = schema_from_structure(schema_structure(schema))
+
+    assert rebuilt.nodes == schema.nodes
+    assert [(e.from_, e.to) for e in rebuilt.edges] == [("START", "chat"), ("chat", "END")]
+
+
+def test_schema_from_structure_raises_validation_error_on_invalid_graph() -> None:
+    with pytest.raises(ValidationError, match="unrecognized provider"):
+        schema_from_structure(
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {
+                        "id": "chat",
+                        "kind": "llm",
+                        "llm": {"provider": "not-a-real-provider", "model": "x", "system": None},
+                        "handler": None,
+                        "tools": [],
+                    }
+                ],
+                "edges": [],
+            }
+        )

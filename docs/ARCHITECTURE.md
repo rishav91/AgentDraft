@@ -43,10 +43,11 @@ tool invocation, LLM calls — is LangGraph, called directly, per the governing 
 | Compiler | Translate a validated schema object — including provider-agnostic LLM config (`ADR-005`) — into a LangGraph `StateGraph` | Python, `langgraph`, `langchain` (for `init_chat_model`) | Takes a schema object, returns a compiled `StateGraph` |
 | Custom-code loader | Resolve a schema's `handler: module:function` references to real Python callables (`FR-1.6`) | Python `importlib` | Takes an import-path string, returns a callable; raises a clear error if unresolvable |
 | CLI | User-facing entry point: `validate`, `run`, `explain` (text or JSON, `FR-3.5`) | Python, `click` or `argparse` | Reads schema file paths and flags from argv; prints to stdout/stderr |
-| Canvas frontend (Phase 2.1) | Read-only rendering of a compiled schema's structure (`FR-4.1`) | TypeScript, React, Vite, React Flow (`@xyflow/react`), `dagre` (`ADR-007`) | Loads a `FR-3.5` JSON export client-side (no backend process); no interface to the Python compiler beyond that file |
+| Canvas frontend | Read-only rendering (`FR-4.1`, Phase 2.1) and full editing (`FR-4.2`, Phase 2.2) of a compiled schema's structure | TypeScript, React, Vite, React Flow (`@xyflow/react`), `dagre` (`ADR-007`) | View-only: loads a `FR-3.5` JSON export client-side, no backend. Editing: fetches/saves against the local API server below (`ADR-007`, `ADR-008`) |
+| Canvas API server (Phase 2.2) | Local, localhost-only HTTP API backing an editing session: read the current graph, validate and persist an edit (`FR-4.3`) | Python stdlib `http.server` (no new dependency) | `GET /api/graph`, `POST /api/save`; parses/validates through the same `Schema` pydantic models the CLI uses, no duplicated logic (`ADR-008`) |
 
-No meta-agent, no backend adapter layer, no canvas editing exists yet — see
-[ROADMAP](ROADMAP.md) for when each is introduced.
+No meta-agent, no backend adapter layer exists yet — see [ROADMAP](ROADMAP.md) for when each is
+introduced.
 
 ## 4. Key flows
 
@@ -90,6 +91,22 @@ can branch on failure class without parsing error text:
    client-side and renders it read-only with React Flow — no backend process, no interface back
    to the Python compiler beyond the file itself (`FR-4.1`, `ADR-007`).
 
+### 4.6 `agentdraft canvas <schema>` + canvas editing (Phase 2.2)
+1. `_load_schema_or_exit` validates the schema up front; an already-invalid schema fails fast
+   (exit 1) before any server starts.
+2. `run_canvas_server` binds a local `ThreadingHTTPServer` (`127.0.0.1`, an OS-picked port by
+   default) and prints its URL (`FR-4.3`, `ADR-008`).
+3. The canvas frontend, pointed at that URL via `VITE_API_BASE`, fetches `GET /api/graph` on load
+   instead of the 2.1 file picker, and renders it editable (`FR-4.2`).
+4. On save, the frontend `POST`s its edited structure to `/api/save`. The server parses it via
+   `schema_from_structure` into the same `Schema` pydantic model `load_schema` uses — every
+   existing validation rule (`FR-1.1`-`FR-1.6`) applies with no duplicated logic.
+5. Valid: `save_schema` (`FR-1.11`) writes the file, `200 {"ok": true}`. Invalid: `422
+   {"errors": [...]}` with the same field-specific text the CLI prints (`format_validation_errors`,
+   `FR-4.4`, `NFR-2.1`); the frontend keeps the user's in-progress edits and surfaces the errors
+   rather than discarding anything.
+6. `Ctrl+C` stops the server; 2.1's static/no-backend viewing mode is untouched by any of this.
+
 ## 5. Multi-tenancy & isolation
 
 Not applicable. Single local user, no accounts, no shared state, no hosting in the current
@@ -119,7 +136,9 @@ resumable; the user re-runs `agentdraft run`.
 
 - **Security:** the custom-code escape hatch (`FR-1.6`) executes arbitrary local Python by design —
   no sandboxing in Phase 1 (deferred, `NFR-4.1`). Acceptable because AgentDraft is local-only,
-  single-user, and the author is the one authoring the schema.
+  single-user, and the author is the one authoring the schema. The canvas's local API server
+  (`FR-4.3`) has no authentication either (`NFR-4.2`, `ADR-008`) — same accepted trust boundary,
+  binds to `127.0.0.1` only.
 - **Config/secrets:** LLM API keys and similar secrets are read from the environment (e.g.
   `OPENAI_API_KEY`), never stored in or read from the schema file itself.
 - **Idempotency/consistency:** not applicable — no persisted state to keep consistent in Phase 1.

@@ -19,6 +19,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-1.8 | Schema expresses sandboxing config for tool execution | P2 — deferred | Out of scope for Phase 1; see `NFR-4.1` |
 | FR-1.9 | Schema expresses multi-agent/subgraph composition | P2 — deferred | Out of scope for Phase 1 |
 | FR-1.10 | Schema includes a required `schema_version` field identifying the AgentDraft schema format version it targets (`ADR-006`) | P0 | Phase 1 schemas declare `schema_version: 1`; a missing or unrecognized version fails validation with a specific error naming the expected version, not a generic parse failure |
+| FR-1.11 | A `Schema` object serializes back to YAML text, the inverse of `load_schema` | P0 | `dump_schema`/`schema_to_yaml` round-trip a loaded schema back to YAML without introducing fields the original didn't use (no `edges:` for an implicit single-node schema, no empty `tools:` on a handler node); the canvas's save path (`FR-4.3`) is built on this |
 
 ### FR-2 — Compiler
 
@@ -45,6 +46,9 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | ID | Requirement | Priority | Acceptance criteria |
 |---|---|---|---|
 | FR-4.1 | Read-only canvas renders a compiled schema's structure (nodes, edges, routing, tool bindings) | P0 | Loading a `FR-3.5` JSON export into the canvas renders every node and edge the schema expresses, with no divergence from what `agentdraft explain` prints for the same schema ([ROADMAP](../ROADMAP.md) Phase 2.1 exit criterion) |
+| FR-4.2 | Canvas supports full editing parity with schema expressiveness: add/remove/edit nodes (llm ↔ handler, provider/model/system, tools) and their outgoing edges (direct or conditional+routes) | P0 | Every construct `FR-1.1`-`FR-1.6` can express is both renderable (`FR-4.1`) and editable in the canvas; editing is node-centric — a node's outgoing routing is edited as a single direct-target-list-or-conditional-block unit, matching `Schema`'s own XOR shape (`schema.py`'s `Edge` model) |
+| FR-4.3 | `agentdraft canvas <schema>` starts a local, localhost-only HTTP API exposing the current graph (`GET /api/graph`) and a validated save endpoint (`POST /api/save`) for the canvas frontend (`ADR-008`) | P0 | A save request is parsed through the same `Schema` pydantic model `load_schema` uses (`schema_from_structure`, `FR-1.11`'s `save_schema`), so every existing validation rule applies with no duplicated logic; a valid save writes the file, an invalid one leaves it unchanged |
+| FR-4.4 | Canvas save validation errors surface as field-specific messages in the UI, not raw server errors | P0 | An invalid save (`FR-4.3`) returns HTTP 422 with the same field-specific error text `format_validation_errors` produces for CLI errors (`NFR-2.1`); the canvas displays them without discarding the user's in-progress edits |
 
 ## Non-functional requirements
 
@@ -54,6 +58,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | NFR-2.1 | Error quality: validation/compile errors are field-specific, not raw library tracebacks | P0 | Every `FR-1.2`/`FR-1.6` failure path names the offending field or reference in its error message |
 | NFR-3.1 | Coupling: compiler targets a single pinned LangGraph version per release, not "latest" | P1 | Declared dependency is an exact or narrow version range, verified in packaging config |
 | NFR-4.1 | Security: no sandboxing of custom-code (`FR-1.6`) execution in Phase 1 | P0 (accepted, not mitigated) | Documented as an accepted risk: local-only, single-user, author-authored code only ([ARCHITECTURE §8](../ARCHITECTURE.md#8-cross-cutting)) |
+| NFR-4.2 | Security: the canvas's local API server (`FR-4.3`) has no authentication | P0 (accepted, not mitigated) | Same trust boundary as `NFR-4.1`: local-only, single-user, binds to `127.0.0.1` only, no remote reachability by design (`ADR-008`) |
 | NFR-5.1 | Responsiveness: `validate`/`explain` complete fast enough for interactive, iterative schema authoring | P1 | *Assumption: sub-2-second target for agents of the size hand-authored in Phase 1 (single-digit node counts); no formal benchmark suite yet — revisit if agents grow larger* |
 | NFR-6.1 | Testability: schema parser and compiler modules have unit test coverage | P0 | Every parser/compiler code path has at least one unit test; no PR merges without passing tests ([ARCHITECTURE §9](../ARCHITECTURE.md#9-testing--ci)) |
 | NFR-6.2 | Testability: CLI commands (`validate`/`run`/`explain`) have end-to-end tests against fixture schemas | P0 | Fixture schemas cover each Phase 1 schema construct (`FR-1.1`-`FR-1.6`); LLM calls are mocked/stubbed, not live, so tests stay deterministic and free |

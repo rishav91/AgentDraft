@@ -12,7 +12,7 @@ from typing import Any
 
 import yaml
 from langchain.chat_models.base import _SUPPORTED_PROVIDERS
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 SUPPORTED_SCHEMA_VERSION = 1
 START = "START"
@@ -153,3 +153,60 @@ def load_schema(path: str | Path) -> Schema:
     """Load and structurally validate a YAML schema file."""
     raw: Any = yaml.safe_load(Path(path).read_text())
     return Schema.model_validate(raw)
+
+
+def format_validation_errors(exc: ValidationError) -> list[str]:
+    """Render a ValidationError as the field-specific messages the CLI prints (NFR-2.1).
+
+    Shared by the CLI and the canvas's local save endpoint (FR-4.3, FR-4.4) so both
+    surfaces report identical error text for the same invalid schema.
+    """
+    return [error["msg"].removeprefix("Value error, ") for error in exc.errors()]
+
+
+def dump_schema(schema: Schema) -> dict[str, Any]:
+    """Render a Schema back into a YAML-serializable dict (FR-1.11).
+
+    Inverse of the parsing `load_schema` does. Omits fields the schema doesn't use
+    (no `edges:` for an implicit single-node schema, no empty `tools:` on a handler
+    node) so a canvas-saved file (`FR-4.3`) still reads like a hand-authored one.
+    """
+    nodes: list[dict[str, Any]] = []
+    for node in schema.nodes:
+        entry: dict[str, Any] = {"id": node.id}
+        if node.llm is not None:
+            llm: dict[str, Any] = {"provider": node.llm.provider, "model": node.llm.model}
+            if node.llm.system is not None:
+                llm["system"] = node.llm.system
+            entry["llm"] = llm
+            if node.tools:
+                entry["tools"] = list(node.tools)
+        else:
+            entry["handler"] = node.handler
+        nodes.append(entry)
+
+    result: dict[str, Any] = {"schema_version": schema.schema_version, "nodes": nodes}
+
+    if schema.edges:
+        edges: list[dict[str, Any]] = []
+        for edge in schema.edges:
+            entry = {"from": edge.from_}
+            if edge.to is not None:
+                entry["to"] = edge.to
+            else:
+                entry["condition"] = edge.condition
+                entry["routes"] = dict(edge.routes or {})
+            edges.append(entry)
+        result["edges"] = edges
+
+    return result
+
+
+def schema_to_yaml(schema: Schema) -> str:
+    """Serialize a Schema to YAML text (FR-1.11)."""
+    return yaml.safe_dump(dump_schema(schema), sort_keys=False, default_flow_style=False)
+
+
+def save_schema(schema: Schema, path: str | Path) -> None:
+    """Write a Schema to PATH as YAML (FR-4.3)."""
+    Path(path).write_text(schema_to_yaml(schema))

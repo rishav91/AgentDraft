@@ -1,12 +1,14 @@
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
-from agentdraft.schema import Schema, load_schema
+from agentdraft.schema import Schema, dump_schema, load_schema, save_schema, schema_to_yaml
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "skeleton.yaml"
 MULTI_NODE_FIXTURE = Path(__file__).parent.parent / "fixtures" / "multi_node.yaml"
+COMPREHENSIVE_FIXTURE = Path(__file__).parent.parent / "fixtures" / "comprehensive.yaml"
 
 
 def test_load_schema_parses_fixture() -> None:
@@ -197,6 +199,59 @@ def test_rejects_node_with_both_llm_and_handler() -> None:
 def test_rejects_node_with_neither_llm_nor_handler() -> None:
     with pytest.raises(ValidationError, match="sets neither 'llm' nor 'handler'"):
         Schema.model_validate({"schema_version": 1, "nodes": [{"id": "chat"}]})
+
+
+def test_schema_to_yaml_round_trips_comprehensive_fixture() -> None:
+    schema = load_schema(COMPREHENSIVE_FIXTURE)
+
+    reloaded = Schema.model_validate(yaml.safe_load(schema_to_yaml(schema)))
+
+    assert reloaded == schema
+
+
+def test_dump_schema_omits_edges_for_implicit_single_node_schema() -> None:
+    schema = load_schema(FIXTURE)
+
+    assert "edges" not in dump_schema(schema)
+
+
+def test_dump_schema_omits_tools_and_system_when_unset() -> None:
+    schema = Schema.model_validate(
+        {
+            "schema_version": 1,
+            "nodes": [{"id": "chat", "llm": {"provider": "anthropic", "model": "x"}}],
+        }
+    )
+
+    dumped = dump_schema(schema)
+
+    assert "tools" not in dumped["nodes"][0]
+    assert "system" not in dumped["nodes"][0]["llm"]
+
+
+def test_dump_schema_omits_tools_for_handler_node() -> None:
+    schema = Schema.model_validate(
+        {
+            "schema_version": 1,
+            "nodes": [{"id": "shout", "handler": "tests.support.handlers:uppercase_last_message"}],
+        }
+    )
+
+    dumped = dump_schema(schema)
+
+    assert dumped["nodes"][0] == {
+        "id": "shout",
+        "handler": "tests.support.handlers:uppercase_last_message",
+    }
+
+
+def test_save_schema_writes_yaml_file(tmp_path: Path) -> None:
+    schema = load_schema(COMPREHENSIVE_FIXTURE)
+    out_path = tmp_path / "out.yaml"
+
+    save_schema(schema, out_path)
+
+    assert Schema.model_validate(yaml.safe_load(out_path.read_text())) == schema
 
 
 def test_rejects_tools_on_handler_node() -> None:

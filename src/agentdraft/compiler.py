@@ -207,6 +207,22 @@ def schema_structure(schema: Schema) -> dict[str, Any]:
     return {"schema_version": schema.schema_version, "nodes": nodes, "edges": edges}
 
 
+def schema_from_structure(data: dict[str, Any]) -> Schema:
+    """Parse a structure dict back into a validated Schema (FR-4.2).
+
+    The inverse of `schema_structure` - same shape `explain --format json` emits and
+    the canvas edits. Every field `schema_structure` adds beyond `Schema`'s own shape
+    (the `kind` tags, always-present `llm`/`handler`/`tools`/`condition`/`routes` keys)
+    is either an ignored extra field or matches that field's own default, so
+    `Schema.model_validate` - the same entry point `load_schema` uses - parses it
+    directly with no separate reconstruction logic to keep in sync. Raises
+    `pydantic.ValidationError` on anything invalid, exactly like `load_schema` does,
+    so canvas save errors (`FR-4.4`) get the same field-specific treatment as CLI
+    errors (`NFR-2.1`).
+    """
+    return Schema.model_validate(data)
+
+
 def explain_schema(schema: Schema) -> str:
     """Render a schema's compiled structure as text, without executing it (FR-3.3).
 

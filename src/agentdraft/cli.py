@@ -7,13 +7,15 @@ Exit codes (FR-3.4, ARCHITECTURE §4.4): 0 success, 1 validation error,
 
 import json
 import traceback
+from pathlib import Path
 
 import click
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
 from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
-from agentdraft.schema import Schema, load_schema
+from agentdraft.schema import Schema, format_validation_errors, load_schema
+from agentdraft.server import run_canvas_server
 
 
 def _load_schema_or_exit(schema_path: str) -> Schema:
@@ -21,8 +23,7 @@ def _load_schema_or_exit(schema_path: str) -> Schema:
     try:
         return load_schema(schema_path)
     except ValidationError as exc:
-        for error in exc.errors():
-            msg = error["msg"].removeprefix("Value error, ")
+        for msg in format_validation_errors(exc):
             click.echo(f"error: {msg}", err=True)
         raise SystemExit(1) from exc
 
@@ -90,6 +91,15 @@ def explain(schema_path: str, output_format: str) -> None:
     except CompileError as exc:
         click.echo(f"error: {exc}", err=True)
         raise SystemExit(2) from None
+
+
+@main.command()
+@click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--port", type=int, default=0, help="Port to bind (default: an OS-picked free port).")
+def canvas(schema_path: str, port: int) -> None:
+    """Start the local editing API for SCHEMA_PATH, for the canvas frontend (FR-4.3)."""
+    _load_schema_or_exit(schema_path)  # fail fast on an already-invalid schema
+    run_canvas_server(Path(schema_path), port=port)  # pragma: no cover - see test_server.py
 
 
 if __name__ == "__main__":
