@@ -13,3 +13,4 @@ canvas/*.tsbuildinfo
 canvas/test-results/
 canvas/playwright-report/
 canvas/blob-report/
+project_idea.md
