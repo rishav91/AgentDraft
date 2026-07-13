@@ -9,14 +9,16 @@ Ctrl+C.
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from pydantic import ValidationError
 
 from agentdraft.compiler import schema_from_structure, schema_structure
+from agentdraft.discovery import discover_callables, get_callable_source
 from agentdraft.schema import format_validation_errors, load_schema, save_schema
 
 
-def _handler_for(schema_path: Path) -> type[BaseHTTPRequestHandler]:
+def _handler_for(schema_path: Path, scan_root: Path) -> type[BaseHTTPRequestHandler]:
     class CanvasRequestHandler(BaseHTTPRequestHandler):
         def _write_json(self, status: int, payload: dict[str, object]) -> None:
             body = json.dumps(payload).encode()
@@ -34,8 +36,20 @@ def _handler_for(schema_path: Path) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
 
         def do_GET(self) -> None:
-            if self.path != "/api/graph":
-                self._write_json(404, {"errors": [f"no such route: GET {self.path}"]})
+            parsed = urlsplit(self.path)
+            if parsed.path == "/api/callables":
+                self._write_json(200, {"callables": discover_callables(scan_root)})
+                return
+            if parsed.path == "/api/source":
+                ref = parse_qs(parsed.query).get("ref", [""])[0]
+                source = get_callable_source(scan_root, ref)
+                if source is None:
+                    self._write_json(404, {"errors": [f"no source found for {ref!r}"]})
+                    return
+                self._write_json(200, {"source": source})
+                return
+            if parsed.path != "/api/graph":
+                self._write_json(404, {"errors": [f"no such route: GET {parsed.path}"]})
                 return
             try:
                 schema = load_schema(schema_path)
@@ -70,15 +84,25 @@ def _handler_for(schema_path: Path) -> type[BaseHTTPRequestHandler]:
 
 
 def create_server(
-    schema_path: Path, *, host: str = "127.0.0.1", port: int = 0
+    schema_path: Path,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    scan_root: Path | None = None,
 ) -> ThreadingHTTPServer:
     """Construct (without running) the canvas API server for SCHEMA_PATH.
 
-    `port=0` (the default) asks the OS for an ephemeral free port. Split out from
-    `run_canvas_server` so tests can start/stop a real server without going through
-    the CLI's blocking `serve_forever`/`KeyboardInterrupt` loop.
+    `port=0` (the default) asks the OS for an ephemeral free port. `scan_root`
+    (default: the current working directory) is where `GET /api/callables`
+    (`FR-4.5`) looks for `module:function` references - the same base modules
+    resolve against at runtime (`loader.resolve_reference`), so results match
+    what a `handler`/`condition`/tool reference would actually import. Split
+    out from `run_canvas_server` so tests can start/stop a real server without
+    going through the CLI's blocking `serve_forever`/`KeyboardInterrupt` loop.
     """
-    return ThreadingHTTPServer((host, port), _handler_for(schema_path))
+    return ThreadingHTTPServer(
+        (host, port), _handler_for(schema_path, scan_root or Path.cwd())
+    )
 
 
 def run_canvas_server(schema_path: Path, *, host: str = "127.0.0.1", port: int = 0) -> None:

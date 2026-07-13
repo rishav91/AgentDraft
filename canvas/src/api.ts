@@ -42,3 +42,41 @@ export async function saveGraph(apiBase: string, structure: GraphStructure): Pro
   }
   return { ok: false, errors: await readErrors(response) };
 }
+
+// Best-effort suggestions for handler/condition/tools fields (FR-4.5) - a
+// static scan, so an empty/partial result on failure just means no
+// suggestions, not a broken editor. Free-text entry still always works.
+export async function fetchCallables(apiBase: string): Promise<string[]> {
+  try {
+    const response = await fetch(`${apiBase}/api/callables`);
+    if (!response.ok) return [];
+    const data: unknown = await response.json();
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      Array.isArray((data as Record<string, unknown>).callables)
+    ) {
+      return (data as { callables: unknown[] }).callables.map(String);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+// Read-only source preview for a discovered callable (FR-4.5) - null means
+// "no preview available" (unresolvable ref, network error), never an error
+// state to surface, since the field itself still works as free text either way.
+export async function fetchCallableSource(apiBase: string, ref: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${apiBase}/api/source?ref=${encodeURIComponent(ref)}`);
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (typeof data === "object" && data !== null && typeof (data as Record<string, unknown>).source === "string") {
+      return (data as { source: string }).source;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

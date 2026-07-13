@@ -160,6 +160,53 @@ def test_get_graph_reports_validation_error_if_file_becomes_invalid_on_disk(
     assert "errors" in body
 
 
+def test_get_callables_scans_the_configured_root(tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.yaml"
+    shutil.copy(FIXTURE, schema_path)
+    scan_root = tmp_path / "project"
+    (scan_root / "pkg").mkdir(parents=True)
+    (scan_root / "pkg" / "handlers.py").write_text("def route(state):\n    return state\n")
+
+    server = create_server(schema_path, port=0, scan_root=scan_root)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        status, body = _get(f"{base_url}/api/callables")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert status == 200
+    assert body == {"callables": ["pkg.handlers:route"]}
+
+
+def test_get_source_returns_the_callables_body(tmp_path: Path) -> None:
+    schema_path = tmp_path / "schema.yaml"
+    shutil.copy(FIXTURE, schema_path)
+    scan_root = tmp_path / "project"
+    (scan_root / "pkg").mkdir(parents=True)
+    (scan_root / "pkg" / "handlers.py").write_text("def route(state):\n    return state\n")
+
+    server = create_server(schema_path, port=0, scan_root=scan_root)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base_url = f"http://127.0.0.1:{server.server_address[1]}"
+        status, body = _get(f"{base_url}/api/source?ref=pkg.handlers:route")
+        missing_status, missing_body = _get(f"{base_url}/api/source?ref=pkg.handlers:nope")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert status == 200
+    assert body == {"source": "def route(state):\n    return state"}
+    assert missing_status == 404
+    assert "errors" in missing_body
+
+
 def test_run_canvas_server_prints_url_and_stops_on_keyboard_interrupt(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

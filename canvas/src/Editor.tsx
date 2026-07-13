@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { Connection } from "@xyflow/react";
 
-import { saveGraph } from "./api";
+import { fetchCallables, saveGraph } from "./api";
 import {
   addDirectTarget,
   addNode,
@@ -27,6 +27,11 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
   const [saveErrors, setSaveErrors] = useState<string[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [callables, setCallables] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchCallables(apiBase).then(setCallables);
+  }, [apiBase]);
 
   const mutate = (next: GraphStructure) => {
     setStructure(next);
@@ -118,6 +123,8 @@ export function Editor({ apiBase, initialStructure }: EditorProps) {
           <Inspector
             structure={structure}
             nodeId={selectedNodeId}
+            apiBase={apiBase}
+            callables={callables}
             onUpdateNode={handleUpdateNode}
             onRemoveNode={handleRemoveNode}
             onSetOutgoingDirect={handleSetOutgoingDirect}

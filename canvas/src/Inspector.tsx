@@ -1,11 +1,14 @@
 import { useState } from "react";
 
+import { CallableField } from "./CallableField";
 import { outgoingEdges } from "./editorActions";
 import type { GraphNode, GraphStructure } from "./types";
 
 type InspectorProps = {
   structure: GraphStructure;
   nodeId: string;
+  apiBase: string;
+  callables: string[];
   onUpdateNode: (patch: Partial<GraphNode>) => void;
   onRemoveNode: () => void;
   onSetOutgoingDirect: (targets: string[]) => void;
@@ -13,10 +16,13 @@ type InspectorProps = {
 };
 
 const RESERVED_IDS = new Set(["START", "END"]);
+const CALLABLES_DATALIST_ID = "agentdraft-callables";
 
 export function Inspector({
   structure,
   nodeId,
+  apiBase,
+  callables,
   onUpdateNode,
   onRemoveNode,
   onSetOutgoingDirect,
@@ -56,6 +62,12 @@ export function Inspector({
 
   return (
     <aside className="inspector">
+      <datalist id={CALLABLES_DATALIST_ID}>
+        {callables.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+
       <div className="inspector__field">
         <label>id</label>
         <input
@@ -134,11 +146,14 @@ export function Inspector({
             <label>tools</label>
             {node.tools.map((tool, i) => (
               <div className="inspector__row" key={i}>
-                <input
+                <CallableField
                   value={tool}
-                  onChange={(e) => {
+                  apiBase={apiBase}
+                  callables={callables}
+                  datalistId={CALLABLES_DATALIST_ID}
+                  onChange={(value) => {
                     const tools = [...node.tools];
-                    tools[i] = e.target.value;
+                    tools[i] = value;
                     onUpdateNode({ tools });
                   }}
                 />
@@ -158,10 +173,13 @@ export function Inspector({
       ) : (
         <div className="inspector__field">
           <label>handler</label>
-          <input
+          <CallableField
             value={node.handler ?? ""}
-            onChange={(e) => onUpdateNode({ handler: e.target.value })}
+            apiBase={apiBase}
+            callables={callables}
+            datalistId={CALLABLES_DATALIST_ID}
             placeholder="module.path:function_name"
+            onChange={(value) => onUpdateNode({ handler: value })}
           />
         </div>
       )}
@@ -225,11 +243,13 @@ export function Inspector({
           </>
         ) : (
           <>
-            <input
-              className="inspector__condition"
+            <CallableField
               value={condition}
+              apiBase={apiBase}
+              callables={callables}
+              datalistId={CALLABLES_DATALIST_ID}
               placeholder="module.path:function_name"
-              onChange={(e) => onSetOutgoingConditional(e.target.value, routes)}
+              onChange={(value) => onSetOutgoingConditional(value, routes)}
             />
             {Object.entries(routes).map(([key, target], i) => (
               <div className="inspector__row" key={i}>

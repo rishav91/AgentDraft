@@ -254,8 +254,7 @@ body {
 
 .inspector__field input,
 .inspector__field select,
-.inspector__field textarea,
-.inspector__condition {
+.inspector__field textarea {
   font: inherit;
   background: var(--node-bg);
   border: 1px solid var(--border);
@@ -263,6 +262,46 @@ body {
   padding: 0.3rem 0.4rem;
   color: var(--fg);
   width: 100%;
+}
+
+.callable-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.callable-field input {
+  font: inherit;
+  background: var(--node-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.4rem;
+  color: var(--fg);
+  width: 100%;
+}
+
+.inspector__row .callable-field {
+  flex: 1;
+}
+
+.callable-field__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.callable-field__source {
+  margin: 0;
+  background: var(--node-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.4rem;
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
 }
 
 .inspector__field textarea {
