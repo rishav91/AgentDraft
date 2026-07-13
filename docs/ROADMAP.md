@@ -139,7 +139,7 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
 
 **Sub-phases:**
 
-- [ ] 3.1 - Checkpointing/resume: `checkpointer` schema block, `SqliteSaver`/`PostgresSaver`
+- [x] 3.1 - Checkpointing/resume: `checkpointer` schema block, `SqliteSaver`/`PostgresSaver`
   passthrough, `agentdraft run --resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`). Built first -
   establishes the shared local store (`ADR-010`) and the `thread_id` concept the later sub-phases
   correlate against.
