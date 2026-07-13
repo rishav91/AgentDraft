@@ -89,11 +89,12 @@ describe("layoutGraph", () => {
     });
   });
 
-  it("produces one direct edge per direct GraphStructure edge", () => {
+  it("produces one direct edge per direct GraphStructure edge, arrowed", () => {
     const { edges } = layoutGraph(SIMPLE);
 
     expect(edges).toHaveLength(2);
     expect(edges.every((e) => e.type === "smoothstep")).toBe(true);
+    expect(edges.every((e) => e.markerEnd !== undefined)).toBe(true);
     expect(edges.map((e) => [e.source, e.target])).toEqual([
       ["START", "chat"],
       ["chat", "END"],
@@ -110,6 +111,7 @@ describe("layoutGraph", () => {
     for (const edge of conditionalEdges) {
       expect(edge.style?.strokeDasharray).toBe("5 5");
       expect(edge.data?.condition).toBe("tests.support.routing:by_last_message_content");
+      expect(edge.markerEnd).toBeDefined();
     }
   });
 

@@ -1,7 +1,10 @@
+import { MarkerType } from "@xyflow/react";
 import dagre from "dagre";
 
 import type { AppFlowEdge, AppFlowNode, EndpointNodeData, SchemaNodeData } from "./flowTypes";
 import type { GraphStructure } from "./types";
+
+const ARROW_MARKER = { type: MarkerType.ArrowClosed, width: 18, height: 18 } as const;
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 72;
@@ -48,6 +51,7 @@ export function layoutGraph(structure: GraphStructure): {
         source: edge.from,
         target: edge.to,
         type: "smoothstep",
+        markerEnd: ARROW_MARKER,
       });
     } else if (edge.kind === "conditional" && edge.routes) {
       for (const [routeKey, target] of Object.entries(edge.routes)) {
@@ -60,6 +64,7 @@ export function layoutGraph(structure: GraphStructure): {
           label: routeKey,
           data: { condition: edge.condition ?? "" },
           style: { strokeDasharray: "5 5" },
+          markerEnd: ARROW_MARKER,
         });
       }
     }

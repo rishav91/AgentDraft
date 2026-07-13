@@ -1,16 +1,19 @@
 import "@xyflow/react/dist/style.css";
 
 import {
+  applyNodeChanges,
   Background,
   Controls,
   MiniMap,
   ReactFlow,
   type Connection,
+  type NodeChange,
   type NodeMouseHandler,
   type NodeTypes,
 } from "@xyflow/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import type { AppFlowNode } from "./flowTypes";
 import { layoutGraph } from "./layout";
 import { EndpointNode } from "./nodes/EndpointNode";
 import { SchemaNode } from "./nodes/SchemaNode";
@@ -40,11 +43,31 @@ export function GraphCanvas({
   onConnect,
   onNodeClick,
 }: GraphCanvasProps) {
-  const { nodes: baseNodes, edges } = useMemo(() => layoutGraph(structure), [structure]);
+  const { nodes: layoutNodes, edges } = useMemo(() => layoutGraph(structure), [structure]);
+
+  // React Flow's `nodes` prop is fully controlled - without an onNodesChange
+  // handler feeding drag deltas back in, dragging has no effect at all. Local
+  // position state, resynced (data only, positions preserved) whenever the
+  // structure's node/edge set changes, is what makes dragging actually stick.
+  const [positionedNodes, setPositionedNodes] = useState<AppFlowNode[]>(layoutNodes);
+  useEffect(() => {
+    setPositionedNodes((current) => {
+      const previousPositions = new Map(current.map((node) => [node.id, node.position]));
+      return layoutNodes.map((node) => ({
+        ...node,
+        position: previousPositions.get(node.id) ?? node.position,
+      }));
+    });
+  }, [layoutNodes]);
+
   const nodes = useMemo(
-    () => baseNodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
-    [baseNodes, selectedNodeId],
+    () => positionedNodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
+    [positionedNodes, selectedNodeId],
   );
+
+  const handleNodesChange = (changes: NodeChange[]) => {
+    setPositionedNodes((current) => applyNodeChanges(changes, current) as AppFlowNode[]);
+  };
 
   const handleNodeClick: NodeMouseHandler | undefined =
     mode === "edit" && onNodeClick ? (_, node) => onNodeClick(node.id) : undefined;
@@ -54,14 +77,16 @@ export function GraphCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      nodesDraggable
       nodesConnectable={mode === "edit"}
+      onNodesChange={handleNodesChange}
       onConnect={mode === "edit" ? onConnect : undefined}
       onNodeClick={handleNodeClick}
       fitView
     >
       <Background />
       <Controls showInteractive={false} />
-      <MiniMap pannable zoomable />
+      <MiniMap pannable zoomable nodeColor="#94a3b8" maskColor="rgba(100, 116, 139, 0.25)" />
     </ReactFlow>
   );
 }
