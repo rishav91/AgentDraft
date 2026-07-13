@@ -385,7 +385,8 @@ def test_dump_schema_omits_max_visits_and_fallback_when_unset() -> None:
     assert "fallback" not in dumped["edges"][0]
 
 
-def test_save_schema_writes_yaml_file(tmp_path: Path) -> None:
+def test_save_schema_writes_yaml_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)  # keep the version-history store (FR-9.1) sandboxed
     schema = load_schema(COMPREHENSIVE_FIXTURE)
     out_path = tmp_path / "out.yaml"
 

@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
 from agentdraft.schema import Schema, format_validation_errors, load_schema
 from agentdraft.server import run_canvas_server
+from agentdraft.versions import RevisionNotFoundError, diff_revisions, list_revisions
 
 
 def _load_schema_or_exit(schema_path: str) -> Schema:
@@ -141,6 +142,36 @@ def explain(schema_path: str, output_format: str) -> None:
     except CompileError as exc:
         click.echo(f"error: {exc}", err=True)
         raise SystemExit(2) from None
+
+
+@main.group()
+def schema() -> None:
+    """Local schema version history (FR-9)."""
+
+
+@schema.command("log")
+@click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
+def schema_log(schema_path: str) -> None:
+    """List recorded revisions of SCHEMA_PATH, most recent first (FR-9.2)."""
+    revisions = list_revisions(schema_path)
+    if not revisions:
+        click.echo(f"{schema_path}: no recorded revisions")
+        return
+    for rev in revisions:
+        click.echo(f"revision {rev.revision}  {rev.created_at}  {rev.content_hash[:12]}")
+
+
+@schema.command("diff")
+@click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
+@click.argument("revision_a", type=int)
+@click.argument("revision_b", type=int)
+def schema_diff(schema_path: str, revision_a: int, revision_b: int) -> None:
+    """Show a unified diff between REVISION_A and REVISION_B of SCHEMA_PATH (FR-9.3)."""
+    try:
+        click.echo(diff_revisions(schema_path, revision_a, revision_b), nl=False)
+    except RevisionNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1) from None
 
 
 @main.command()

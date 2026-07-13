@@ -14,6 +14,8 @@ import yaml
 from langchain.chat_models.base import _SUPPORTED_PROVIDERS
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from agentdraft.versions import record_revision
+
 # Sorted, public re-export of the same set _check_providers validates against
 # (FR-1.3, ADR-005) - the canvas's provider dropdown reads this (FR-4.6) so it
 # can never drift from what a save would actually accept.
@@ -270,5 +272,9 @@ def schema_to_yaml(schema: Schema) -> str:
 
 
 def save_schema(schema: Schema, path: str | Path) -> None:
-    """Write a Schema to PATH as YAML (FR-4.3)."""
-    Path(path).write_text(schema_to_yaml(schema))
+    """Write a Schema to PATH as YAML (FR-4.3), recording a new local revision
+    unless the content is unchanged from the last recorded one (FR-9.1).
+    """
+    content = schema_to_yaml(schema)
+    Path(path).write_text(content)
+    record_revision(path, content)

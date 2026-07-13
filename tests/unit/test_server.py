@@ -17,7 +17,8 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "comprehensive.yaml"
 
 
 @pytest.fixture
-def running_server(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+def running_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[str, Path]]:
+    monkeypatch.chdir(tmp_path)  # keep a save's local version-history store (FR-9.1) sandboxed
     schema_path = tmp_path / "schema.yaml"
     shutil.copy(FIXTURE, schema_path)
 
@@ -105,11 +106,12 @@ def test_post_save_writes_valid_edit_to_disk(running_server: tuple[str, Path]) -
 
 
 @pytest.fixture
-def rooted_server(tmp_path: Path) -> Iterator[tuple[str, Path]]:
+def rooted_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[str, Path]]:
     """Like `running_server`, but with import_root pinned to tmp_path (not cwd),
     so a test can write sibling schema files that /api/schemas and /api/open
     can actually see.
     """
+    monkeypatch.chdir(tmp_path)  # keep a save's local version-history store (FR-9.1) sandboxed
     schema_path = tmp_path / "schema.yaml"
     shutil.copy(FIXTURE, schema_path)
 
