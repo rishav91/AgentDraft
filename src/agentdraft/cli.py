@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
 from agentdraft.evals import EvalsFileError, load_evals_file, run_case
+from agentdraft.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
 from agentdraft.observability import run_span, shutdown_tracing
 from agentdraft.runs import (
     COMPLETED,
@@ -72,6 +73,42 @@ def main() -> None:
     # fallback. Keys still come from the environment either way (ARCHITECTURE §8);
     # this is just a convenient way to populate it.
     load_dotenv(Path.cwd() / ".env", override=False)
+
+
+@main.command("init")
+@click.argument("dest", type=click.Path(file_okay=False), required=False)
+@click.option(
+    "--provider",
+    type=click.Choice(sorted(PROVIDER_API_KEY_ENV)),
+    default="anthropic",
+    show_default=True,
+    help="Which working template to scaffold.",
+)
+@click.option("--force", is_flag=True, help="Overwrite files that already exist at DEST.")
+def init_cmd(dest: str | None, provider: str, force: bool) -> None:
+    """Scaffold a new agent project at DEST (default: current directory)."""
+    target = Path(dest) if dest is not None else Path.cwd()
+    try:
+        written = scaffold(target, provider, force)
+    except ScaffoldExistsError as exc:
+        click.echo(
+            f"error: refusing to overwrite existing file(s): {', '.join(exc.existing)} "
+            "(use --force)",
+            err=True,
+        )
+        raise SystemExit(1) from None
+
+    for path in written:
+        click.echo(f"created {path}")
+
+    schema_path = target / "schema.yaml"
+    click.echo("\nNext steps:")
+    click.echo(
+        f"  1. cp {target / '.env.example'} {target / '.env'}   "
+        f"# then fill in {PROVIDER_API_KEY_ENV[provider]}"
+    )
+    click.echo(f"  2. agentdraft validate {schema_path}")
+    click.echo(f'  3. agentdraft run {schema_path} "<your message>"')
 
 
 @main.command()
