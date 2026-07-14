@@ -149,7 +149,7 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
   list`/`show`/`prune` (`FR-6.1`-`FR-6.4`).
 - [x] 3.4 - Observability: OpenTelemetry spans per run/node, OTLP export via standard env vars,
   correlated with the run ledger's `run_id` (`FR-7.1`-`FR-7.4`, `ADR-011`, [OBSERVABILITY.md](OBSERVABILITY.md)).
-- [ ] 3.5 - Eval harness: `agentdraft eval <schema> <evals-file>`, deterministic assertions,
+- [x] 3.5 - Eval harness: `agentdraft eval <schema> <evals-file>`, deterministic assertions,
   new exit code `4` (`FR-8.1`-`FR-8.4`, `ADR-012`).
 
 **Exit criteria:** CI green; the full [P3 summary](requirements/system-requirements.md#p3-summary---the-phase-3-production-hardening-scope)
