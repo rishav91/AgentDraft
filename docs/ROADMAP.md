@@ -151,7 +151,7 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
   correlated with the run ledger's `run_id` (`FR-7.1`-`FR-7.4`, `ADR-011`, [OBSERVABILITY.md](OBSERVABILITY.md)).
 - [x] 3.5 - Eval harness: `agentdraft eval <schema> <evals-file>`, deterministic assertions,
   new exit code `4` (`FR-8.1`-`FR-8.4`, `ADR-012`).
-- [ ] 3.6 - Schema revert + resume schema-consistency guard: `agentdraft schema revert
+- [x] 3.6 - Schema revert + resume schema-consistency guard: `agentdraft schema revert
   <schema> <rev>` (additive, never destroys/reorders revisions, `ADR-013`); `agentdraft run
   --resume` fails if the schema changed since that thread's last recorded run, unless `--force`
   (`FR-9.5`, `FR-5.6`, `ADR-014`).
