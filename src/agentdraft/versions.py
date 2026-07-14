@@ -121,6 +121,21 @@ def get_revision(schema_path: str | Path, revision: int) -> SchemaRevision | Non
     return SchemaRevision(*row) if row is not None else None
 
 
+def revert_to_revision(schema_path: str | Path, revision: int) -> SchemaRevision:
+    """Restore SCHEMA_PATH's working file to REVISION's recorded content, appending
+    it as a new revision if it differs from the current tip (`FR-9.5`) - git-revert
+    semantics: existing revisions are never deleted, reordered, or overwritten
+    (`ADR-013`). Returns the new tip revision, or the looked-up REVISION itself if
+    the file was already at that content (no new row recorded).
+    """
+    target = get_revision(schema_path, revision)
+    if target is None:
+        raise RevisionNotFoundError(schema_path, revision)
+    Path(schema_path).write_text(target.content)
+    new_rev = record_revision(schema_path, target.content)
+    return new_rev if new_rev is not None else target
+
+
 def diff_revisions(schema_path: str | Path, revision_a: int, revision_b: int) -> str:
     """Unified diff between two recorded revisions of SCHEMA_PATH (`FR-9.3`)."""
     a = get_revision(schema_path, revision_a)

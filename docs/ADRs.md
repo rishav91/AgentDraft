@@ -19,6 +19,8 @@ Referenced by ID (`ADR-00N`) from other docs.
 | [ADR-010](#adr-010---local-persistence-store-single-shared-sqlite-file-no-db-abstraction) | Local persistence store: single shared SQLite file, no DB abstraction | Accepted |
 | [ADR-011](#adr-011---observability-opentelemetry-via-langgraphlangchain-callbacks-no-bundled-backend) | Observability: OpenTelemetry via LangGraph/LangChain callbacks, no bundled backend | Accepted |
 | [ADR-012](#adr-012---eval-harness-separate-file-deterministic-assertions-only) | Eval harness: separate file, deterministic assertions only | Accepted |
+| [ADR-013](#adr-013---schema-revert-additive-not-destructive) | Schema revert: additive, not destructive | Accepted |
+| [ADR-014](#adr-014---resume-schema-consistency-guard) | Resume schema-consistency guard | Accepted |
 
 ---
 
@@ -475,3 +477,82 @@ handling of it (`FR-8.4`).
   `if exit_code != 0` are unaffected, but anything branching specifically on `3` vs. "everything
   else" needs updating for the new `4` case - called out explicitly here since exit codes are
   conventionally not changed casually.
+
+---
+
+## ADR-013 - Schema revert: additive, not destructive
+
+**Context.** `ADR-010` established a single, linear, append-only `schema_versions` table - one row
+per distinct content change, revision numbers never reused. Adding a "go back to an older version"
+command (`FR-9.5`) raises the same question git's `revert` vs. `reset` split answers differently:
+does going back rewrite/discard history, or add to it?
+
+**Decision.** `agentdraft schema revert <schema> <rev>` restores the working file to `rev`'s
+recorded content and records that as a **new** revision via the existing `record_revision`
+(git-`revert` semantics), rather than deleting or renumbering anything after `rev` (git-`reset`
+semantics). `record_revision`'s existing dedup-by-hash behavior already makes a no-op revert (target
+content equals the current tip) safe - no duplicate row.
+
+**Alternatives.**
+- **Rewind: delete/discard every revision after `rev`, making it the new tip.** Rejected: destructive
+  with no undo (this is a local-only tool with no separate backup of `schema_versions`), and it
+  makes "revert to a revision that itself only existed because of a later edit" - i.e. jumping back
+  *forward* in time after a revert - impossible without re-deriving that content by hand. The
+  append-only alternative solves this for free: revision numbers are permanent, so any revision is
+  revertable-to at any point, indefinitely.
+- **A HEAD-pointer/branching model (full git semantics).** Rejected outright per the project's
+  governing principle - no abstraction (here, branch/merge complexity) until a concrete need exists;
+  a single local user editing one schema file has no use for concurrent history lines.
+
+**Consequences.**
+- `+` Nothing is ever destroyed; "I reverted and now want the version from before I reverted" is
+  just another `schema revert` call, not a special case.
+- `+` No new error class or edge case beyond the existing `RevisionNotFoundError` (`ADR`-level reuse
+  of `FR-9.3`'s diff-lookup machinery).
+- `−` The `schema_versions` table only ever grows - acceptable at this project's scale (single user,
+  hand-authored schemas), same trade-off already accepted for the run ledger and version history in
+  general (`ADR-010`); pruning isn't offered for this table, unlike `runs` (`FR-6.4`).
+
+---
+
+## ADR-014 - Resume schema-consistency guard
+
+**Context.** `agentdraft run --resume <thread_id>` (`ADR-009`) compiles whatever schema is currently
+on disk and resumes LangGraph's checkpoint replay against it. If the schema changed - hand-edited, or
+restored via `schema revert` (`ADR-013`) - between the original run and the resume, this silently
+resumes against a *different compiled graph* than the one that produced the checkpoint: renamed or
+removed nodes, changed prompts, different tool bindings. `runs.py` already records a
+`schema_content_hash` per run (`FR-6.1`) but nothing had ever read it back on resume - a real gap in
+the durability guarantee Phase 3 exists to provide (`NFR-7.1`).
+
+**Decision.** On `--resume`, look up the most recent recorded run for that `thread_id`
+(`get_latest_run_for_thread`) and compare its `schema_content_hash` against the current schema
+file's hash. A mismatch fails fast (exit `1`) before any execution, naming the problem explicitly;
+a new `--force` flag bypasses the check for a user who deliberately wants to resume against a
+changed schema. When no prior run is recorded for that `thread_id` (e.g. the run ledger was pruned,
+`FR-6.4`, or the checkpoint didn't originate from `agentdraft run`), there is no baseline to compare
+against, so the guard is skipped rather than blocking (`FR-5.6`).
+
+**Alternatives.**
+- **Warn but proceed on mismatch, instead of failing.** Rejected: a warning is easy to miss in
+  scripted/CI usage, and the failure mode being guarded against (silently diverging agent behavior)
+  is exactly the kind of thing `NFR-2.1`'s "fail loud and specific" posture exists to prevent -
+  consistent with the existing "no checkpoint found for thread_id" error already failing hard rather
+  than starting a fresh, silently-different run.
+- **Store and check the full schema content (or the target compiled-graph structure), not just a
+  hash.** Rejected: the hash is already computed and recorded for `FR-6.1`'s own purposes; comparing
+  hashes is sufficient to detect "same bytes or not" and needs no new storage or comparison logic.
+- **Block unconditionally, no `--force` override.** Rejected: some schema edits between runs are
+  genuinely benign (e.g. a comment-only change, or an intentional forward-compatible prompt tweak)
+  and a user who has verified that should be able to proceed without editing the schema back first.
+
+**Consequences.**
+- `+` Closes a real correctness gap: resuming a crashed run can no longer silently execute a
+  different graph than the one that produced its checkpoint.
+- `+` No new storage: reuses the `schema_content_hash` `FR-6.1` already records and a straightforward
+  new lookup (`get_latest_run_for_thread`) on the existing `runs` table.
+- `−` The guard is only as good as the run ledger: pruning a thread's runs (`FR-6.4`) removes the
+  baseline it needs, silently re-opening the gap this ADR closes for that thread. Documented as a
+  known limitation rather than solved, since a fully robust version would need a way to protect a
+  thread's runs from pruning while its checkpoint is still resumable - not built until that proves
+  to be a real problem, per the project's governing principle.

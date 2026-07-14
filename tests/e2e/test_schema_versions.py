@@ -74,3 +74,58 @@ def test_schema_diff_exits_1_on_unknown_revision() -> None:
 
     assert result.exit_code == 1
     assert "no revision 99" in result.output
+
+
+def test_schema_revert_restores_an_older_revision_as_a_new_one() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        schema_path = Path("schema.yaml")
+        schema_path.write_text(FIXTURE.read_text())
+
+        from agentdraft.schema import load_schema, save_schema
+
+        schema = load_schema(schema_path)
+        save_schema(schema, schema_path)  # revision 1
+        schema.nodes[0].llm.system = "a different system prompt"  # type: ignore[union-attr]
+        save_schema(schema, schema_path)  # revision 2
+
+        result = runner.invoke(main, ["schema", "revert", str(schema_path), "1"])
+        log_result = runner.invoke(main, ["schema", "log", str(schema_path)])
+        reverted_content = schema_path.read_text()
+
+    assert result.exit_code == 0
+    assert "reverted to revision 1's content as new revision 3" in result.output
+    assert "terse" in reverted_content
+    assert "revision 3" in log_result.output
+
+
+def test_schema_revert_is_a_no_op_when_already_at_that_content() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        schema_path = Path("schema.yaml")
+        schema_path.write_text(FIXTURE.read_text())
+
+        from agentdraft.schema import load_schema, save_schema
+
+        save_schema(load_schema(schema_path), schema_path)  # revision 1
+
+        result = runner.invoke(main, ["schema", "revert", str(schema_path), "1"])
+
+    assert result.exit_code == 0
+    assert "already at revision 1's content" in result.output
+
+
+def test_schema_revert_exits_1_on_unknown_revision() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        schema_path = Path("schema.yaml")
+        schema_path.write_text(FIXTURE.read_text())
+
+        from agentdraft.schema import load_schema, save_schema
+
+        save_schema(load_schema(schema_path), schema_path)
+
+        result = runner.invoke(main, ["schema", "revert", str(schema_path), "99"])
+
+    assert result.exit_code == 1
+    assert "no revision 99" in result.output

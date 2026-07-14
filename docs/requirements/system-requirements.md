@@ -63,6 +63,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-5.3 | `agentdraft run <schema> --resume <thread_id>` resumes an interrupted or failed run from its last persisted checkpoint | P0 | Execution continues from the last completed node for that `thread_id` rather than re-running the graph from `START`; an unknown/nonexistent `thread_id` fails with a specific error, not a bare LangGraph traceback |
 | FR-5.4 | Default checkpointer backend is SQLite, written to the shared local store (`ADR-010`) | P0 | A schema with `checkpointer: {backend: sqlite}` (or `backend` omitted while `checkpointer` is present) persists to `.agentdraft/state.db` with no additional configuration |
 | FR-5.5 | A schema with no `checkpointer` block runs exactly as before - opt-in, not a breaking change | P0 | Existing Phase 1/2 schemas with no `checkpointer` field validate and run identically to today; `--resume` on such a schema fails with a clear "no checkpointer configured" error rather than a silent no-op |
+| FR-5.6 | `agentdraft run --resume <thread_id>` fails if the schema has changed since that thread's most recently recorded run, unless `--force` is passed (`ADR-014`) | P0 | Resume compares the current schema file's content hash against the hash recorded for the most recent prior run of that `thread_id`; a mismatch fails with a specific error before any execution, not a silent resume against a different compiled graph; `--force` bypasses the check; the guard is skipped (not enforced) when no prior run is recorded for that `thread_id` |
 
 ### FR-6 - Run history
 
@@ -99,6 +100,7 @@ and [ARCHITECTURE](../ARCHITECTURE.md). IDs are stable once assigned — append,
 | FR-9.2 | `agentdraft schema log <schema>` lists recorded revisions for a schema path, most recent first | P1 | Output shows revision number, timestamp, and content hash for each recorded save |
 | FR-9.3 | `agentdraft schema diff <schema> <rev-a> <rev-b>` shows a text diff between two recorded revisions | P1 | Output is a standard unified diff of the two revisions' YAML text; also usable as the diff primitive the Phase 4+ meta-agent's MCP tools plan to expose ([ROADMAP](../ROADMAP.md) 4.1) |
 | FR-9.4 | Schema version history is local-only, distinct from `schema_version` (`ADR-006`) | P0 | Revision numbers here track edit history of one file over time; `schema_version` (`FR-1.10`) remains the unrelated schema-*format* version field - no field or command conflates the two |
+| FR-9.5 | `agentdraft schema revert <schema> <rev>` restores the working file to a recorded revision's content, appending it as a new revision (`ADR-013`) | P1 | The working file's content is replaced with `rev`'s recorded content and (unless it's already identical to the current tip) recorded as a new, higher-numbered revision; existing revisions are never deleted, reordered, or overwritten - reverting to any past revision, including one made "current" again by a later revert, remains possible indefinitely; an out-of-range revision fails with the same "no revision N" error as `schema diff` |
 
 ## Non-functional requirements
 
@@ -132,7 +134,8 @@ MVP; see [ROADMAP](../ROADMAP.md) for when each is picked back up.
 ## P3 summary - the Phase 3 production-hardening scope
 
 - **Persistence & checkpointing:** opt-in `checkpointer` block, SQLite default / Postgres available,
-  explicit `--resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`).
+  explicit `--resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`), guarded by a schema-consistency
+  check that fails resume if the schema changed since that thread's last run (`FR-5.6`, `ADR-014`).
 - **Run history:** every run recorded to a local ledger; `agentdraft runs list`/`show`/`prune`
   (`FR-6.1`-`FR-6.4`).
 - **Observability:** OpenTelemetry spans per run/node, OTLP export via standard env vars, no
@@ -140,7 +143,8 @@ MVP; see [ROADMAP](../ROADMAP.md) for when each is picked back up.
 - **Eval harness:** `agentdraft eval <schema> <evals-file>`, deterministic assertions only, exit
   code `4` on assertion failure (`FR-8.1`-`FR-8.4`, `ADR-012`).
 - **Schema version history:** every save recorded as a revision, browsable via `agentdraft schema
-  log`/`diff` (`FR-9.1`-`FR-9.4`), distinct from the `schema_version` format field (`ADR-006`).
+  log`/`diff`/`revert` (`FR-9.1`-`FR-9.5`), distinct from the `schema_version` format field
+  (`ADR-006`); revert is additive, never destroying or reordering revisions (`ADR-013`).
 - **Storage:** all AgentDraft-owned local state (versions, run ledger, default checkpoints) in one
   shared SQLite file, no DB abstraction (`ADR-010`).
 

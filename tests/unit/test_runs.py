@@ -9,6 +9,7 @@ from agentdraft.runs import (
     FAILED,
     NodeTiming,
     finish_run,
+    get_latest_run_for_thread,
     get_run,
     list_runs,
     prune_runs,
@@ -30,6 +31,15 @@ def _dead_pid() -> int:
     proc = subprocess.Popen(["true"])
     proc.wait()
     return proc.pid
+
+
+def _set_started_at(run_id: str, started_at: str) -> None:
+    """Directly overwrite a run row's started_at, for deterministic most-recent-first
+    ordering in tests without depending on real wall-clock timing between calls.
+    """
+    db_path = ensure_local_store_dir()
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute("UPDATE runs SET started_at = ? WHERE run_id = ?", (started_at, run_id))
 
 
 def test_start_run_creates_a_running_row() -> None:
@@ -120,6 +130,26 @@ def test_list_runs_normalizes_path_outside_cwd(tmp_path: Path) -> None:
     run_id = start_run(outside, "hx", None)
 
     assert [r.run_id for r in list_runs(outside)] == [run_id]
+
+
+def test_get_latest_run_for_thread_returns_none_when_no_match() -> None:
+    start_run("schema.yaml", "abc123", "thread-1")
+
+    assert get_latest_run_for_thread("schema.yaml", "thread-2") is None
+    assert get_latest_run_for_thread("other.yaml", "thread-1") is None
+
+
+def test_get_latest_run_for_thread_returns_the_most_recent_match() -> None:
+    older = start_run("schema.yaml", "hash-1", "thread-1")
+    newer = start_run("schema.yaml", "hash-2", "thread-1")
+    _set_started_at(older, "2024-01-01T00:00:00+00:00")
+    _set_started_at(newer, "2024-06-01T00:00:00+00:00")
+
+    result = get_latest_run_for_thread("schema.yaml", "thread-1")
+
+    assert result is not None
+    assert result.run_id == newer
+    assert result.schema_content_hash == "hash-2"
 
 
 def test_running_row_with_dead_process_reconciles_to_interrupted() -> None:

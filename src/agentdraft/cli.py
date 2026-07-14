@@ -28,6 +28,7 @@ from agentdraft.runs import (
     FAILED,
     NodeTiming,
     finish_run,
+    get_latest_run_for_thread,
     get_run,
     list_runs,
     now_iso,
@@ -36,7 +37,12 @@ from agentdraft.runs import (
 )
 from agentdraft.schema import Schema, format_validation_errors, load_schema
 from agentdraft.server import run_canvas_server
-from agentdraft.versions import RevisionNotFoundError, diff_revisions, list_revisions
+from agentdraft.versions import (
+    RevisionNotFoundError,
+    diff_revisions,
+    list_revisions,
+    revert_to_revision,
+)
 
 
 def _load_schema_or_exit(schema_path: str) -> Schema:
@@ -87,7 +93,13 @@ def validate(schema_path: str) -> None:
     help="Resume an interrupted run by its thread_id (FR-5.3) instead of starting a new "
     "one - requires the schema to declare a `checkpointer` block (FR-5.1).",
 )
-def run(schema_path: str, message: str | None, thread_id: str | None) -> None:
+@click.option(
+    "--force",
+    is_flag=True,
+    help="With --resume, skip the check that the schema hasn't changed since thread_id's "
+    "last recorded run (FR-5.6) - resume anyway against the current schema.",
+)
+def run(schema_path: str, message: str | None, thread_id: str | None, force: bool) -> None:
     """Compile SCHEMA_PATH and run it with an initial human MESSAGE.
 
     MESSAGE is required to start a new run; it's optional with --resume, where
@@ -96,6 +108,7 @@ def run(schema_path: str, message: str | None, thread_id: str | None) -> None:
     is_resume = thread_id is not None
     schema = _load_schema_or_exit(schema_path)
     graph = _compile_or_exit(schema)
+    schema_content_hash = hashlib.sha256(Path(schema_path).read_bytes()).hexdigest()
 
     if is_resume and schema.checkpointer is None:
         click.echo(
@@ -110,10 +123,21 @@ def run(schema_path: str, message: str | None, thread_id: str | None) -> None:
     config: RunnableConfig | None = None
     if schema.checkpointer is not None:
         if is_resume:
+            assert thread_id is not None  # enforced by is_resume's definition
             saver = graph.checkpointer
             assert isinstance(saver, BaseCheckpointSaver)  # schema.checkpointer set => a saver
             if saver.get_tuple({"configurable": {"thread_id": thread_id}}) is None:
                 click.echo(f"error: no checkpoint found for thread_id {thread_id!r}", err=True)
+                raise SystemExit(1)
+            prior = get_latest_run_for_thread(schema_path, thread_id)
+            if prior is not None and prior.schema_content_hash != schema_content_hash and not force:
+                click.echo(
+                    f"error: schema at {schema_path!r} has changed since thread_id "
+                    f"{thread_id!r} was last run - resuming would replay this checkpoint "
+                    "against a different compiled graph than produced it; use --force to "
+                    "resume anyway (FR-5.6)",
+                    err=True,
+                )
                 raise SystemExit(1)
         else:
             thread_id = str(uuid.uuid4())
@@ -124,7 +148,6 @@ def run(schema_path: str, message: str | None, thread_id: str | None) -> None:
 
     input_ = {"messages": [("human", message)]} if message is not None else None
 
-    schema_content_hash = hashlib.sha256(Path(schema_path).read_bytes()).hexdigest()
     run_id = start_run(schema_path, schema_content_hash, thread_id)
     node_timings: list[NodeTiming] = []
     boundary = now_iso()
@@ -246,6 +269,25 @@ def schema_diff(schema_path: str, revision_a: int, revision_b: int) -> None:
     except RevisionNotFoundError as exc:
         click.echo(f"error: {exc}", err=True)
         raise SystemExit(1) from None
+
+
+@schema.command("revert")
+@click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
+@click.argument("revision", type=int)
+def schema_revert(schema_path: str, revision: int) -> None:
+    """Restore SCHEMA_PATH to REVISION's recorded content as a new revision (FR-9.5)."""
+    try:
+        result = revert_to_revision(schema_path, revision)
+    except RevisionNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1) from None
+    if result.revision == revision:
+        click.echo(f"{schema_path}: already at revision {revision}'s content")
+    else:
+        click.echo(
+            f"{schema_path}: reverted to revision {revision}'s content "
+            f"as new revision {result.revision}"
+        )
 
 
 def _parse_iso(value: str) -> datetime:

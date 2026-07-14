@@ -126,7 +126,11 @@ can branch on failure class without parsing error text:
    thread (`ADR-009`) - AgentDraft does not implement resume logic itself.
 3. An unknown `thread_id`, or a schema with no `checkpointer` configured, fails with a specific
    error before any execution starts (`FR-5.3`, `FR-5.5`).
-4. A new run-ledger row is written either way (`FR-6.1`), so a resumed run's history is visible
+4. The current schema file's content hash is compared against the hash recorded for that
+   `thread_id`'s most recent prior run (`ADR-014`); a mismatch fails before execution starts unless
+   `--force` is passed (`FR-5.6`) - unless no prior run is recorded for that thread, in which case
+   there's no baseline to check and resume proceeds.
+5. A new run-ledger row is written either way (`FR-6.1`), so a resumed run's history is visible
    alongside the original interrupted one.
 
 ### 4.8 `agentdraft eval <schema> <evals-file>` (Phase 3.5)
@@ -163,6 +167,7 @@ Phase 1. *Assumption: revisit if a hosted/multi-user version is ever pursued (de
 | LangGraph itself raises during execution (e.g. a tool call fails, an LLM call errors) | AgentDraft does not catch/reinterpret LangGraph's own runtime errors | LangGraph's native error surfaces as-is — AgentDraft is a thin compiler, not a runtime wrapper, per tenet 4 |
 | LangGraph upstream breaking change | Compiler may fail against a newer LangGraph version | AgentDraft pins a tested LangGraph version per release (`ADR-003` consequence) rather than tracking latest |
 | `agentdraft run --resume` given an unknown/nonexistent `thread_id` (Phase 3) | Fails before any execution starts | A specific "no checkpoint found for thread_id" error, not a bare LangGraph traceback (`FR-5.3`) |
+| `agentdraft run --resume` given a schema that changed since that thread's last recorded run (Phase 3) | Fails before any execution starts, unless `--force` | A specific "schema has changed since thread_id's last run" error (`FR-5.6`, `ADR-014`); silently skipped (not enforced) if no prior run is recorded for that thread |
 | Process killed mid-run with `checkpointer` configured (Phase 3) | The run ledger row is left at `status: running`; the checkpointer's own last-persisted checkpoint (if any) still exists | `agentdraft runs list` reconciles a stale `running` row to `interrupted` at read time ([DATA-MODEL §4](DATA-MODEL.md#4-consistency--concurrency)); the user resumes with `--resume <thread_id>` if a checkpoint exists, or re-runs otherwise |
 | `checkpointer.backend: postgres` configured but the database is unreachable (Phase 3) | Compilation succeeds; execution fails on first checkpoint write | LangGraph's own connection error surfaces, per tenet 4 - AgentDraft does not reinterpret it |
 | OTLP endpoint configured but unreachable (Phase 3) | Span export fails silently in the background (standard OTel SDK behavior) | The run itself is unaffected - tracing is best-effort and never blocks or fails a run (`NFR-8.1`) |

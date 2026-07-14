@@ -188,3 +188,80 @@ def test_agentdraft_run_resume_continues_from_last_checkpoint_after_a_crash(
     assert second.exit_code == 0
     assert "[greeter]" not in second.output
     assert "[closer] goodbye from closer" in second.output
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_agentdraft_run_resume_exits_1_if_schema_changed_since_last_run(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    """FR-5.6: resuming against a schema that changed since the thread's last
+    recorded run fails fast rather than silently replaying the checkpoint against a
+    different compiled graph.
+    """
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = [
+        AIMessage(content="hello from greeter"),
+        RuntimeError("simulated crash in closer"),
+    ]
+    mock_init_chat_model.return_value = mock_llm
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        schema_path = Path("schema.yaml")
+        schema_path.write_text(CHECKPOINTED_MULTI_NODE_FIXTURE.read_text())
+
+        first = runner.invoke(main, ["run", str(schema_path), "hi"])
+        assert first.exit_code == 3
+
+        match = re.search(r"thread_id: (\S+)", first.output)
+        assert match is not None
+        thread_id = match.group(1)
+
+        schema_path.write_text(schema_path.read_text() + "\n# an unrelated edit\n")
+
+        blocked = runner.invoke(main, ["run", str(schema_path), "--resume", thread_id])
+        assert blocked.exit_code == 1
+        assert "has changed since thread_id" in blocked.output
+        assert mock_llm.invoke.call_count == 2  # the resume never called the LLM again
+
+        mock_llm.invoke.side_effect = [AIMessage(content="goodbye from closer")]
+        forced = runner.invoke(main, ["run", str(schema_path), "--resume", thread_id, "--force"])
+
+    assert forced.exit_code == 0
+    assert "[closer] goodbye from closer" in forced.output
+
+
+@patch("agentdraft.compiler.init_chat_model")
+def test_agentdraft_run_resume_succeeds_with_no_prior_run_to_compare_against(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    """FR-5.6: the schema-consistency guard is best-effort - if the run ledger has no
+    recorded run for this thread_id (e.g. pruned), resume proceeds rather than
+    blocking with nothing to compare against.
+    """
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = [
+        AIMessage(content="hello from greeter"),
+        RuntimeError("simulated crash in closer"),
+    ]
+    mock_init_chat_model.return_value = mock_llm
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        first = runner.invoke(main, ["run", str(CHECKPOINTED_MULTI_NODE_FIXTURE), "hi"])
+        assert first.exit_code == 3
+
+        match = re.search(r"thread_id: (\S+)", first.output)
+        assert match is not None
+        thread_id = match.group(1)
+
+        pruned = runner.invoke(main, ["runs", "prune", "--keep-last", "0"])
+        assert pruned.exit_code == 0
+
+        mock_llm.invoke.side_effect = [AIMessage(content="goodbye from closer")]
+        second = runner.invoke(
+            main, ["run", str(CHECKPOINTED_MULTI_NODE_FIXTURE), "--resume", thread_id]
+        )
+
+    assert second.exit_code == 0
+    assert "[closer] goodbye from closer" in second.output

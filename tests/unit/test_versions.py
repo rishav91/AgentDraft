@@ -8,6 +8,7 @@ from agentdraft.versions import (
     get_revision,
     list_revisions,
     record_revision,
+    revert_to_revision,
 )
 
 # tests/conftest.py's autouse _isolate_cwd fixture already sandboxes every test's
@@ -114,3 +115,49 @@ def test_diff_revisions_raises_on_missing_revision_b() -> None:
 
     with pytest.raises(RevisionNotFoundError, match="no revision 99"):
         diff_revisions("schema.yaml", 1, 99)
+
+
+def test_revert_to_revision_restores_file_content_and_appends_a_new_revision() -> None:
+    record_revision("schema.yaml", "v1\n")
+    record_revision("schema.yaml", "v2\n")
+    record_revision("schema.yaml", "v3\n")
+
+    result = revert_to_revision("schema.yaml", 1)
+
+    assert Path("schema.yaml").read_text() == "v1\n"
+    assert result.revision == 4
+    assert result.content == "v1\n"
+    assert [r.content for r in list_revisions("schema.yaml")] == ["v1\n", "v3\n", "v2\n", "v1\n"]
+
+
+def test_revert_to_revision_is_a_no_op_when_content_matches_the_tip() -> None:
+    record_revision("schema.yaml", "v1\n")
+    record_revision("schema.yaml", "v2\n")
+
+    result = revert_to_revision("schema.yaml", 2)
+
+    assert result.revision == 2
+    assert len(list_revisions("schema.yaml")) == 2
+
+
+def test_revert_to_revision_raises_on_unknown_revision() -> None:
+    record_revision("schema.yaml", "v1\n")
+
+    with pytest.raises(RevisionNotFoundError, match="no revision 99"):
+        revert_to_revision("schema.yaml", 99)
+
+
+def test_revert_to_revision_never_loses_a_revision_after_reverting_forward_and_back() -> None:
+    """A revert-then-revert-forward sequence proves no revision is ever destroyed -
+    every revision number stays revertable-to permanently (`ADR-013`).
+    """
+    record_revision("schema.yaml", "v1\n")
+    record_revision("schema.yaml", "v2\n")
+    record_revision("schema.yaml", "v3\n")
+
+    revert_to_revision("schema.yaml", 1)  # now at v1 content, as revision 4
+    forward = revert_to_revision("schema.yaml", 3)  # jump to the "future" revision 3's content
+
+    assert forward.content == "v3\n"
+    assert Path("schema.yaml").read_text() == "v3\n"
+    assert len(list_revisions("schema.yaml")) == 5

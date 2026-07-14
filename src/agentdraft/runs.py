@@ -203,6 +203,20 @@ def get_run(run_id: str) -> Run | None:
     return _row_to_run(row) if row is not None else None
 
 
+def get_latest_run_for_thread(schema_path: str | Path, thread_id: str) -> Run | None:
+    """Fetch the most recent recorded run for THREAD_ID on SCHEMA_PATH - the
+    baseline `--resume`'s schema-consistency guard checks against (`FR-5.6`).
+    `None` if no run is recorded (guard has nothing to check against).
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            f"SELECT {_COLUMNS} FROM runs WHERE schema_path = ? AND thread_id = ? "
+            "ORDER BY started_at DESC LIMIT 1",
+            (_normalize_path(schema_path), thread_id),
+        ).fetchone()
+    return _row_to_run(row) if row is not None else None
+
+
 def prune_runs(*, older_than: timedelta | None = None, keep_last: int | None = None) -> int:
     """Delete run-ledger rows (`FR-6.4`) - never a row that's still genuinely
     in-flight (status `running` with a live process). Among the rest, KEEP_LAST
