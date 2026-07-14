@@ -21,6 +21,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
 from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
+from agentdraft.doctor import run_checks
 from agentdraft.evals import EvalsFileError, load_evals_file, run_case
 from agentdraft.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
 from agentdraft.observability import run_span, shutdown_tracing
@@ -215,6 +216,19 @@ def run(schema_path: str, message: str | None, thread_id: str | None, force: boo
 
     finish_run(run_id, status=COMPLETED, node_timings=node_timings, error=None, exit_code=0)
     shutdown_tracing()
+
+
+@main.command()
+@click.argument("schema_path", type=click.Path(exists=True, dir_okay=False), required=False)
+def doctor(schema_path: str | None) -> None:
+    """Check the local environment, optionally against SCHEMA_PATH's requirements."""
+    schema = _load_schema_or_exit(schema_path) if schema_path is not None else None
+    checks = run_checks(schema)
+    for check in checks:
+        status = "ok" if check.ok else "MISSING"
+        click.echo(f"[{status}] {check.message}")
+    if not all(check.ok for check in checks):
+        raise SystemExit(1)
 
 
 @main.command()
