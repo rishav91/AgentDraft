@@ -21,6 +21,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
 from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
+from agentdraft.evals import EvalsFileError, load_evals_file, run_case
 from agentdraft.observability import run_span, shutdown_tracing
 from agentdraft.runs import (
     COMPLETED,
@@ -178,6 +179,43 @@ def explain(schema_path: str, output_format: str) -> None:
     except CompileError as exc:
         click.echo(f"error: {exc}", err=True)
         raise SystemExit(2) from None
+
+
+@main.command("eval")
+@click.argument("schema_path", type=click.Path(exists=True, dir_okay=False))
+@click.argument("evals_path", type=click.Path(exists=True, dir_okay=False))
+def eval_cmd(schema_path: str, evals_path: str) -> None:
+    """Run EVALS_PATH's cases against SCHEMA_PATH, asserting on final graph state (FR-8)."""
+    try:
+        cases = load_evals_file(evals_path)
+    except EvalsFileError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1) from None
+
+    schema = _load_schema_or_exit(schema_path)
+    graph = _compile_or_exit(schema)
+
+    passed = 0
+    failed = 0
+    for case in cases:
+        try:
+            result = run_case(graph, case)
+        except Exception:
+            traceback.print_exc()
+            raise SystemExit(3) from None
+
+        status = "PASS" if result.passed else "FAIL"
+        click.echo(f"[{status}] {result.name}")
+        for assertion_result in result.assertion_results:
+            click.echo(f"    {assertion_result.message}")
+        if result.passed:
+            passed += 1
+        else:
+            failed += 1
+
+    click.echo(f"\n{passed} passed, {failed} failed")
+    if failed:
+        raise SystemExit(4)
 
 
 @main.group()

@@ -1,0 +1,22 @@
+schema: skeleton.yaml
+cases:
+  - name: "equals assertion passes"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        equals: "Hello, world!"
+  - name: "contains assertion passes"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        contains: "world"
+  - name: "matches assertion passes"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        matches: "^Hello, .*!$"
+  - name: "equals assertion fails"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        equals: "Goodbye, world!"
