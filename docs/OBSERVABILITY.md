@@ -1,25 +1,33 @@
 # Observability - AgentDraft
 
-See [README](README.md) for the doc map. See [ADR-011](ADRs.md#adr-011---observability-opentelemetry-via-langgraphlangchain-callbacks-no-bundled-backend)
+See [README](README.md) for the doc map. See [ADR-011](ADRs.md#adr-011---observability-opentelemetry-spans-around-compiled-node-functions-no-bundled-backend)
 for why this is OpenTelemetry with no bundled backend, and [FR-7](requirements/system-requirements.md#fr-7--observability)
 for the requirement list.
 
 ## 1. What's traced
 
-One root span per `agentdraft run` invocation, one child span per executed graph node:
+One root span per `agentdraft run` invocation, one child span per executed schema-defined node
+(`llm`/`handler` - not the synthesized `{node}__tools` tool-execution nodes the compiler adds
+internally):
 
 | Span | Attributes |
 |---|---|
-| Root (`agentdraft.run`) | `agentdraft.run_id` (matches the [run ledger](DATA-MODEL.md#runs-agentdraft-owned-fr-61-fr-64)'s `run_id`, `FR-7.1`), `agentdraft.schema_path`, `agentdraft.thread_id` (if `checkpointer` configured), overall status |
-| Child (`agentdraft.node.<name>`) | Node name, start/end time, status (`ok`/`error`), and, for `llm`-bearing nodes, token usage (`prompt_tokens`/`completion_tokens`/`total_tokens`) when the underlying LangChain response exposes it (`FR-7.2`) |
+| Root (`agentdraft.run`) | `agentdraft.run_id` (matches the [run ledger](DATA-MODEL.md#runs-agentdraft-owned-fr-61-fr-64)'s `run_id`, `FR-7.1`), `agentdraft.schema_path` |
+| Child (`agentdraft.node.<id>`) | `agentdraft.node` (the node id), OTel's standard span status (`ok`/`error`, with the exception recorded on failure), and, when the node's response exposes token usage, `agentdraft.tokens.prompt`/`agentdraft.tokens.completion`/`agentdraft.tokens.total` (`FR-7.2`) |
 
-Instrumentation hooks into LangGraph/LangChain's own callback interface - AgentDraft does not wrap
-or intercept execution itself, per [ARCHITECTURE tenet 4](ARCHITECTURE.md#1-design-tenets) (compile
-to the real thing, don't reimplement it).
+Each compiled node's function is wrapped in the span at compile time - the same extension point
+`compiler.py` already uses to wrap a node for visit-tracking (`FR-1.12`) - rather than hooked in via
+LangChain's callback system (`ADR-011`'s alternatives: a compiled graph's callback events include
+many internal, undocumented `langsmith:hidden`-tagged sub-runs that make a callback-based filter
+fragile). AgentDraft does not reimplement graph execution itself either way, per
+[ARCHITECTURE tenet 4](ARCHITECTURE.md#1-design-tenets).
 
 ## 2. Correlation with the run ledger
 
-Every span carries `agentdraft.run_id`. The [run ledger](DATA-MODEL.md) (`FR-6.1`) is the
+The root span carries `agentdraft.run_id`; every node span shares that root span's `trace_id`
+(standard OTel trace/span-tree correlation, not a duplicated `run_id` attribute on every child
+span - see `FR-7.1`). Any trace backend that groups by `trace_id` shows the full run, node spans
+included, from that one root-span lookup. The [run ledger](DATA-MODEL.md) (`FR-6.1`) is the
 always-on, zero-config local record of that same run - a trace backend is optional and external,
 the ledger is not. Given a `run_id` from `agentdraft runs show <run_id>`, the same id is the query
 key into whatever OTLP backend a user has pointed AgentDraft at, if any.
@@ -49,7 +57,7 @@ Listed here as starting points, not endorsements requiring any particular one:
 
 ## 5. Non-goals
 
-- No bundled trace-storage or visualization UI ([ADR-011](ADRs.md#adr-011---observability-opentelemetry-via-langgraphlangchain-callbacks-no-bundled-backend)) - by design, not a gap to fill later.
+- No bundled trace-storage or visualization UI ([ADR-011](ADRs.md#adr-011---observability-opentelemetry-spans-around-compiled-node-functions-no-bundled-backend)) - by design, not a gap to fill later.
 - No AgentDraft-specific telemetry config surface beyond standard OTel env vars - adding one would
   duplicate what the OTel SDK already standardizes.
 - No cost/pricing computation inside AgentDraft itself - token-usage attributes are emitted

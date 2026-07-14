@@ -21,6 +21,7 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
 from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
+from agentdraft.observability import run_span, shutdown_tracing
 from agentdraft.runs import (
     COMPLETED,
     FAILED,
@@ -128,25 +129,31 @@ def run(schema_path: str, message: str | None, thread_id: str | None) -> None:
     boundary = now_iso()
 
     try:
-        for chunk in graph.stream(input_, config=config):
-            for node_name, node_output in chunk.items():
-                ended_at = now_iso()
-                node_timings.append(
-                    NodeTiming(
-                        node=node_name, started_at=boundary, ended_at=ended_at, status="completed"
+        with run_span(run_id, schema_path):
+            for chunk in graph.stream(input_, config=config):
+                for node_name, node_output in chunk.items():
+                    ended_at = now_iso()
+                    node_timings.append(
+                        NodeTiming(
+                            node=node_name,
+                            started_at=boundary,
+                            ended_at=ended_at,
+                            status="completed",
+                        )
                     )
-                )
-                boundary = ended_at
-                for msg in node_output["messages"]:
-                    click.echo(f"[{node_name}] {msg.content}")
+                    boundary = ended_at
+                    for msg in node_output["messages"]:
+                        click.echo(f"[{node_name}] {msg.content}")
     except Exception as exc:
         # LangGraph's own runtime error surfaces as-is (ARCHITECTURE §7) - only the
         # exit code is AgentDraft's to control.
         finish_run(run_id, status=FAILED, node_timings=node_timings, error=str(exc), exit_code=3)
+        shutdown_tracing()
         traceback.print_exc()
         raise SystemExit(3) from None
 
     finish_run(run_id, status=COMPLETED, node_timings=node_timings, error=None, exit_code=0)
+    shutdown_tracing()
 
 
 @main.command()

@@ -32,6 +32,27 @@ def test_agentdraft_run_end_to_end(mock_init_chat_model: MagicMock) -> None:
 
 
 @patch("agentdraft.compiler.init_chat_model")
+def test_agentdraft_run_with_token_usage_metadata_still_succeeds(
+    mock_init_chat_model: MagicMock,
+) -> None:
+    """FR-7.2: a response exposing usage_metadata is attached to the node's
+    OpenTelemetry span, but never changes the run's own visible behavior.
+    """
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = AIMessage(
+        content="Hello, world!",
+        usage_metadata={"input_tokens": 12, "output_tokens": 4, "total_tokens": 16},
+    )
+    mock_init_chat_model.return_value = mock_llm
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["run", str(FIXTURE), "hi"])
+
+    assert result.exit_code == 0
+    assert "[chat] Hello, world!" in result.output
+
+
+@patch("agentdraft.compiler.init_chat_model")
 def test_agentdraft_run_with_tool_call_end_to_end(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.bind_tools.return_value = mock_llm

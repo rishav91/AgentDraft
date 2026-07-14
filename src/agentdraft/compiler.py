@@ -26,6 +26,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from agentdraft.loader import HandlerResolutionError, resolve_reference
+from agentdraft.observability import node_span, record_token_usage
 from agentdraft.schema import Checkpointer, Edge, Node, Schema
 from agentdraft.store import ensure_local_store_dir
 
@@ -97,6 +98,27 @@ def _with_visit_tracking(
         result = dict(fn(state))
         result["edge_visits"] = {node_id: 1}
         return result
+
+    return wrapped
+
+
+def _with_tracing(
+    node_id: str, fn: Callable[[AgentState], dict[str, Any]]
+) -> Callable[[AgentState], dict[str, Any]]:
+    """Wrap NODE_ID's node function in an OpenTelemetry span (`FR-7.1`), attaching
+    token-usage attributes from its response when present (`FR-7.2`). A no-op
+    span (`agentdraft.observability`'s default when no OTLP endpoint is
+    configured) makes this effectively free (`NFR-8.1`).
+    """
+
+    def wrapped(state: AgentState) -> dict[str, Any]:
+        with node_span(node_id) as span:
+            result = fn(state)
+            messages = result.get("messages")
+            last_message = messages[-1] if isinstance(messages, list) and messages else None
+            usage = getattr(last_message, "usage_metadata", None)
+            record_token_usage(span, usage)
+            return result
 
     return wrapped
 
@@ -178,6 +200,7 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
             handler_fn = _resolve_handler(node.handler, context=f"nodes[{node.id!r}].handler")
             if node.id in capped_sources:
                 handler_fn = _with_visit_tracking(node.id, handler_fn)
+            handler_fn = _with_tracing(node.id, handler_fn)
             graph.add_node(node.id, handler_fn)
             continue
 
@@ -192,6 +215,7 @@ def compile_schema(schema: Schema) -> CompiledStateGraph:
         llm_node_fn: Callable[[AgentState], dict[str, Any]] = _make_llm_node(node, llm)
         if node.id in capped_sources:
             llm_node_fn = _with_visit_tracking(node.id, llm_node_fn)
+        llm_node_fn = _with_tracing(node.id, llm_node_fn)
         graph.add_node(node.id, llm_node_fn)
 
         if tools:

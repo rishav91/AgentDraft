@@ -381,7 +381,7 @@ backend need exists for AgentDraft-owned data.
 
 ---
 
-## ADR-011 - Observability: OpenTelemetry via LangGraph/LangChain callbacks, no bundled backend
+## ADR-011 - Observability: OpenTelemetry spans around compiled node functions, no bundled backend
 
 **Context.** Production use of a compiled agent needs visibility into per-node latency, token
 usage, and failures across a run - today, the only way to see any of this is stdout during `run`
@@ -389,19 +389,26 @@ or a post-hoc read of the run ledger (`FR-6.1`). The [README](README.md) previou
 Observability doc entirely ("no tracing UI until a canvas exists to host it"); that reasoning no
 longer applies once real emission is being built, independent of any UI.
 
-**Decision.** Instrument the compiled graph's execution via LangGraph/LangChain's existing callback
-hooks to emit OpenTelemetry spans - one root span per run, one child span per node (`FR-7.1`),
-token usage as span attributes where the underlying LangChain response exposes it (`FR-7.2`).
-Export is OTLP-based, driven entirely by standard OpenTelemetry environment variables
-(`OTEL_EXPORTER_OTLP_ENDPOINT` etc., `FR-7.3`) - no AgentDraft-specific config surface. AgentDraft
-ships no bundled trace-storage/UI backend (`FR-7.4`); [OBSERVABILITY.md](OBSERVABILITY.md)
-documents self-hosted OSS options (Langfuse, SigNoz, HyperDX, Arize Phoenix) users may point OTLP
-at.
+**Decision.** Emit OpenTelemetry spans - one root span per run, one child span per node (`FR-7.1`),
+token usage as span attributes where the underlying LangChain response exposes it (`FR-7.2`) - by
+wrapping each compiled node's function at compile time, the same extension point `compiler.py`
+already uses to wrap a node for visit-tracking (`FR-1.12`). Export is OTLP-based, driven entirely
+by standard OpenTelemetry environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT` etc., `FR-7.3`) - no
+AgentDraft-specific config surface. AgentDraft ships no bundled trace-storage/UI backend (`FR-7.4`);
+[OBSERVABILITY.md](OBSERVABILITY.md) documents self-hosted OSS options (Langfuse, SigNoz, HyperDX,
+Arize Phoenix) users may point OTLP at.
 
 **Alternatives.**
+- **Hook in via LangGraph/LangChain's `BaseCallbackHandler` system**, the original plan for this
+  ADR. Rejected during implementation: a compiled graph's callback events include many internal
+  sub-runs tagged `langsmith:hidden` with no `name` and only a `metadata['langgraph_node']` key to
+  identify the real node - reliably filtering these down to "one clean span per node" means
+  depending on an undocumented, version-coupled internal convention. Wrapping the node function
+  AgentDraft already owns gets an equally real span, with real start/end times and direct access to
+  the node's own return value for token-usage extraction, none of that fragility.
 - **Build a bespoke AgentDraft-specific tracing format and local viewer.** Rejected: duplicates
   what OpenTelemetry already standardizes, locks users into an AgentDraft-only tool, and is a much
-  larger build than wiring an existing callback hook to an existing SDK.
+  larger build than emitting standard OTel spans.
 - **Bundle a specific backend** (e.g. ship a Langfuse integration as the default/only path).
   Rejected: picks a vendor/opinion for every user regardless of their existing stack - the same
   category of premature commitment `ADR-003` avoids for execution backends, applied here to
@@ -410,13 +417,23 @@ at.
 **Consequences.**
 - `+` Vendor-neutral: any OTLP-compatible backend works with zero AgentDraft code changes, today or
   in the future.
-- `+` No new always-on infrastructure for users who don't set the OTLP env var - spans are created
-  (cheap, in-process) but never sent (`NFR-8.1`).
-- `−` AgentDraft takes a new direct dependency (the OpenTelemetry SDK) purely for instrumentation,
-  even though it bundles no backend to send data to by default.
+- `+` No new always-on infrastructure for users who don't set the OTLP env var - `opentelemetry-api`'s
+  own default (no provider ever installed) creates non-recording spans, verified directly: zero
+  network calls, no export machinery touched (`NFR-8.1`).
+- `+` Node-level spans only cover schema-defined nodes (`llm`/`handler`), not the synthesized
+  `{node}__tools` tool-execution nodes the compiler adds internally - a deliberate scope match to
+  what a schema author thinks of as "a node" (`FR-3.5`'s `schema_structure`), not every LangGraph
+  implementation detail.
+- `−` AgentDraft takes a new direct (non-optional) dependency on `opentelemetry-sdk` and an OTLP/HTTP
+  exporter purely for instrumentation, even though it bundles no backend to send data to by default.
 - `−` No default local visualization out of the box - someone who wants to see a trace today must
   stand up, or point at an existing, OTel-compatible backend themselves. A deliberate cost of
   staying vendor-neutral, not an oversight.
+- `−` OTel's global tracer provider can be installed at most once per process (an OTel SDK
+  restriction, not an AgentDraft choice) - harmless for a real `agentdraft run` invocation (one
+  process per run), but means the "endpoint configured -> provider installed" code path is
+  exercised by manual/smoke testing rather than the automated suite, to avoid one test's exporter
+  configuration leaking into every later test in the same pytest process.
 
 ---
 
