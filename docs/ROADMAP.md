@@ -147,7 +147,7 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
   schema log`/`diff` (`FR-9.1`-`FR-9.4`).
 - [x] 3.3 - Run history: every `agentdraft run` recorded to the local ledger; `agentdraft runs
   list`/`show`/`prune` (`FR-6.1`-`FR-6.4`).
-- [ ] 3.4 - Observability: OpenTelemetry spans per run/node, OTLP export via standard env vars,
+- [x] 3.4 - Observability: OpenTelemetry spans per run/node, OTLP export via standard env vars,
   correlated with the run ledger's `run_id` (`FR-7.1`-`FR-7.4`, `ADR-011`, [OBSERVABILITY.md](OBSERVABILITY.md)).
 - [ ] 3.5 - Eval harness: `agentdraft eval <schema> <evals-file>`, deterministic assertions,
   new exit code `4` (`FR-8.1`-`FR-8.4`, `ADR-012`).
