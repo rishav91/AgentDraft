@@ -163,7 +163,7 @@ Phase 1 held itself to for schema expressiveness.
 
 ## Phase 3.5 - Public distribution
 
-**Status:** In progress.
+**Status:** In progress - only 3.5.8 (the first real publish, a manual/human-gated step) remains.
 
 **Goal:** make AgentDraft actually installable by someone who isn't its author - a real PyPI
 package with metadata, a scaffold command that gets a new user to a runnable agent in minutes, an
@@ -194,11 +194,11 @@ with no access to this repo's source - the concrete blocker `ADR-015` resolves.
 - [x] 3.5.4 - Root consumer files: `README.md`, `CONTRIBUTING.md`, `.env.example`.
 - [x] 3.5.5 - Docs suite refactor: `docs/GETTING_STARTED.md`, `docs/README.md` document-map update,
   `ADR-015`, this Phase 3.5 section, `canvas/README.md` npm-consumer-mode section.
-- [ ] 3.5.6 - Canvas runtime-config + npm CLI wrapper: `canvas/src/App.tsx` resolves
+- [x] 3.5.6 - Canvas runtime-config + npm CLI wrapper: `canvas/src/apiBase.ts` resolves
   `window.__AGENTDRAFT_API_BASE__` as a fallback to `VITE_API_BASE`; new `canvas/bin/agentdraft-canvas.js`
   serves the prebuilt bundle plus a `/agentdraft-config.js` route; `canvas/package.json` becomes
   publishable (`ADR-015`).
-- [ ] 3.5.7 - CI publish workflows: `publish-python.yml` (PyPI Trusted Publishing), `publish-canvas.yml`
+- [x] 3.5.7 - CI publish workflows: `publish-python.yml` (PyPI Trusted Publishing), `publish-canvas.yml`
   (npm, `NPM_TOKEN`).
 - [ ] 3.5.8 - First real publish: a `v0.1.x` GitHub Release and a `canvas-v0.1.x` tag, verified from
   a clean environment.
