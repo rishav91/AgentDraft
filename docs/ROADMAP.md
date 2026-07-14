@@ -120,7 +120,7 @@ the cleanest actual fix for this class of graph.
 
 ## Phase 3 - Production hardening: persistence, observability, evals
 
-**Status:** Not started.
+**Status:** Done.
 
 **Goal:** make a pip-installed AgentDraft agent trustworthy to run for real - resumable after a
 crash, inspectable after the fact, traceable externally, and guarded against silent behavioral
@@ -160,6 +160,53 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
 requirements list is met, including `NFR-7.1`-`NFR-9.1`; a real crash-and-resume scenario has been
 demonstrated end to end against a non-trivial agent, not just covered by unit tests - the same bar
 Phase 1 held itself to for schema expressiveness.
+
+## Phase 3.5 - Public distribution
+
+**Status:** In progress.
+
+**Goal:** make AgentDraft actually installable by someone who isn't its author - a real PyPI
+package with metadata, a scaffold command that gets a new user to a runnable agent in minutes, an
+environment-check command, and a canvas frontend reachable without cloning the repo. Non-blocking
+for Phase 4 (the meta-agent's MCP server doesn't depend on public distribution existing), but
+sequenced before it: `FR-2.5` (compiler/schema logic as a plain library, the premise Phase 4's MCP
+server relies on) is exactly what makes AgentDraft worth publishing now, and wider exposure without
+a real install/setup story would just generate confused first impressions.
+
+**What ships:** PyPI packaging metadata and a `LICENSE`/`CHANGELOG` (`ADR-015`); `agentdraft init`,
+a scaffold command; `agentdraft doctor`, an environment-check command; a root-level consumer docs
+set (`README.md`, `CONTRIBUTING.md`, `.env.example`) and a `docs/GETTING_STARTED.md` setup guide;
+an independently-versioned `agentdraft-canvas` npm package with a runtime-configurable API base
+(`ADR-015`); CI publish workflows for both registries.
+
+**What it unlocks:** `pip install agent-draft` and `npx agentdraft-canvas` both work for a stranger
+with no access to this repo's source - the concrete blocker `ADR-015` resolves.
+
+**Sub-phases:**
+
+- [x] 3.5.1 - Python packaging metadata: `pyproject.toml` readme/license/authors/classifiers/urls,
+  `LICENSE` (MIT), `CHANGELOG.md`. Distribution name `agent-draft` (the `agentdraft` PyPI name is
+  taken by an unrelated package; the `agentdraft` console script is unaffected).
+- [x] 3.5.2 - `agentdraft init [DEST] [--provider anthropic|openai] [--force]`: scaffolds a working
+  schema.yaml plus its supporting Python module(s) and a `.env.example`.
+- [x] 3.5.3 - `agentdraft doctor [SCHEMA_PATH]`: checks Python version, presence (never value) of a
+  schema's inferred provider API key, checkpointer `dsn_env`, and required optional extras.
+- [x] 3.5.4 - Root consumer files: `README.md`, `CONTRIBUTING.md`, `.env.example`.
+- [x] 3.5.5 - Docs suite refactor: `docs/GETTING_STARTED.md`, `docs/README.md` document-map update,
+  `ADR-015`, this Phase 3.5 section, `canvas/README.md` npm-consumer-mode section.
+- [ ] 3.5.6 - Canvas runtime-config + npm CLI wrapper: `canvas/src/App.tsx` resolves
+  `window.__AGENTDRAFT_API_BASE__` as a fallback to `VITE_API_BASE`; new `canvas/bin/agentdraft-canvas.js`
+  serves the prebuilt bundle plus a `/agentdraft-config.js` route; `canvas/package.json` becomes
+  publishable (`ADR-015`).
+- [ ] 3.5.7 - CI publish workflows: `publish-python.yml` (PyPI Trusted Publishing), `publish-canvas.yml`
+  (npm, `NPM_TOKEN`).
+- [ ] 3.5.8 - First real publish: a `v0.1.x` GitHub Release and a `canvas-v0.1.x` tag, verified from
+  a clean environment.
+
+**Exit criteria:** CI green; `pip install agent-draft` followed by `agentdraft init` and `agentdraft
+run` works end to end from a clean environment with no access to this repo's source; `npx
+agentdraft-canvas --api-base <url>` renders and edits against a real `agentdraft canvas` process
+with no local `npm install` of the canvas source required.
 
 ## Phase 4+ - Meta-agent and AgentWeave
 

@@ -45,6 +45,7 @@ this project is settled by this rule.
 
 | Doc | Purpose |
 |---|---|
+| [GETTING_STARTED.md](GETTING_STARTED.md) | Install, env vars, extras, and all three ways to run the canvas - the practical setup guide the root [README](../README.md) defers to |
 | [PRD.md](PRD.md) | Problem, personas, goals/non-goals, use cases, success metrics, risks |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Design tenets, component breakdown, key flows, failure modes |
 | [ADRs.md](ADRs.md) | Schema format, language, no-backend-abstraction, escape-hatch, persistence, and observability decisions |
@@ -60,11 +61,12 @@ starts.
 ## Reading order
 
 1. [PRD.md](PRD.md) — why this exists, what it is and isn't
-2. [ARCHITECTURE.md](ARCHITECTURE.md) - how the system is built
-3. [ADRs.md](ADRs.md) — why the key decisions were made this way
-4. [requirements/system-requirements.md](requirements/system-requirements.md) - the exact contract, per phase
-5. [DATA-MODEL.md](DATA-MODEL.md) and [OBSERVABILITY.md](OBSERVABILITY.md) - Phase 3's persistence and tracing detail
-6. [ROADMAP.md](ROADMAP.md) - what's next, and why in this order
+2. [GETTING_STARTED.md](GETTING_STARTED.md) - install it and run something, before reading further
+3. [ARCHITECTURE.md](ARCHITECTURE.md) - how the system is built
+4. [ADRs.md](ADRs.md) — why the key decisions were made this way
+5. [requirements/system-requirements.md](requirements/system-requirements.md) - the exact contract, per phase
+6. [DATA-MODEL.md](DATA-MODEL.md) and [OBSERVABILITY.md](OBSERVABILITY.md) - Phase 3's persistence and tracing detail
+7. [ROADMAP.md](ROADMAP.md) - what's next, and why in this order
 
 ## Conventions
 
