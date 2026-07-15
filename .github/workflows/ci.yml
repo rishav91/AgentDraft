@@ -15,7 +15,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install package with dev dependencies
-        run: pip install -e ".[dev]"
+        # [postgres] is required here, not just [dev] - the postgres
+        # checkpointer code path (compiler.py) and its own unit test
+        # (test_build_checkpointer_postgres_wires_dsn_and_calls_setup,
+        # which patches real psycopg/langgraph.checkpoint.postgres
+        # attributes) both need it genuinely importable, and mypy can't
+        # resolve those imports' types without it either.
+        run: pip install -e ".[dev,postgres]"
         env:
           # This job doesn't need a real bundled canvas UI (ADR-015) - skip
           # the hatch_build.py hook's npm build for a faster, deterministic
