@@ -1,0 +1,41 @@
+name: Publish Python package (TestPyPI dry run)
+
+# Manual only (Actions tab -> Run workflow) - a dry run of publish-python.yml's
+# exact mechanism (OIDC exchange, hatch_build.py's canvas bundling, the built
+# artifact itself) against TestPyPI before a real release, not tied to a
+# GitHub Release the way the real publish workflow is.
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      # TestPyPI Trusted Publishing (OIDC) - no token secret needed. Requires
+      # a one-time Trusted Publisher registration on the TestPyPI project's
+      # settings, pointing at this repo + this workflow file + this
+      # environment name.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: canvas/package-lock.json
+
+      - name: Build sdist and wheel (bundles the canvas UI via hatch_build.py)
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
