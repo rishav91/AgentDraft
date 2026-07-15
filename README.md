@@ -5,7 +5,6 @@ Define an agent as a declarative YAML schema; AgentDraft compiles it into a real
 `StateGraph` - not a reimplementation of LangGraph, a thin, typed layer on top of it.
 
 [![PyPI](https://img.shields.io/pypi/v/agent-draft)](https://pypi.org/project/agent-draft/)
-[![npm](https://img.shields.io/npm/v/agentdraft-canvas)](https://www.npmjs.com/package/agentdraft-canvas)
 [![CI](https://github.com/rishav91/AgentDraft/actions/workflows/ci.yml/badge.svg)](https://github.com/rishav91/AgentDraft/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -32,16 +31,16 @@ config) against what a schema actually needs, before you hit a failure mid-run.
 
 ## The canvas (visual editor)
 
-AgentDraft ships a separate visual editor for the graph a schema compiles to.
-It works view-only, or live-editing backed by the same schema/compiler library the CLI uses.
+A visual editor for the graph a schema compiles to ships bundled in - no separate install, no
+Node.js needed:
 
 ```sh
-agentdraft canvas schema.yaml         # starts the local editing API, prints its URL
-npx agentdraft-canvas --api-base <url-it-printed>
+agentdraft canvas schema.yaml
 ```
 
-See [canvas/README.md](canvas/README.md) for the view-only mode and running the canvas from
-source.
+This prints a URL - open it in a browser to see and edit the graph, backed by the same
+schema/compiler library the CLI uses. See [canvas/README.md](canvas/README.md) for the view-only
+mode and running the canvas from source.
 
 ## What a schema looks like
 

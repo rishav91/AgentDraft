@@ -167,20 +167,22 @@ Phase 1 held itself to for schema expressiveness.
 
 **Goal:** make AgentDraft actually installable by someone who isn't its author - a real PyPI
 package with metadata, a scaffold command that gets a new user to a runnable agent in minutes, an
-environment-check command, and a canvas frontend reachable without cloning the repo. Non-blocking
-for Phase 4 (the meta-agent's MCP server doesn't depend on public distribution existing), but
-sequenced before it: `FR-2.5` (compiler/schema logic as a plain library, the premise Phase 4's MCP
-server relies on) is exactly what makes AgentDraft worth publishing now, and wider exposure without
-a real install/setup story would just generate confused first impressions.
+environment-check command, and a canvas UI usable with no separate install. Non-blocking for Phase
+4 (the meta-agent's MCP server doesn't depend on public distribution existing), but sequenced
+before it: `FR-2.5` (compiler/schema logic as a plain library, the premise Phase 4's MCP server
+relies on) is exactly what makes AgentDraft worth publishing now, and wider exposure without a real
+install/setup story would just generate confused first impressions.
 
 **What ships:** PyPI packaging metadata and a `LICENSE`/`CHANGELOG` (`ADR-015`); `agentdraft init`,
 a scaffold command; `agentdraft doctor`, an environment-check command; a root-level consumer docs
 set (`README.md`, `CONTRIBUTING.md`, `.env.example`) and a `docs/GETTING_STARTED.md` setup guide;
-an independently-versioned `agentdraft-canvas` npm package with a runtime-configurable API base
-(`ADR-015`); CI publish workflows for both registries.
+the canvas UI's prebuilt static assets bundled directly into the Python wheel via a Hatchling build
+hook, with `agentdraft canvas` serving both the API and the UI from one process (`ADR-015`); a CI
+publish workflow.
 
-**What it unlocks:** `pip install agent-draft` and `npx agentdraft-canvas` both work for a stranger
-with no access to this repo's source - the concrete blocker `ADR-015` resolves.
+**What it unlocks:** `pip install agent-draft` followed by `agentdraft canvas <schema>` works for a
+stranger with no access to this repo's source and no Node.js install of their own - the concrete
+blocker `ADR-015` resolves.
 
 **Sub-phases:**
 
@@ -193,20 +195,21 @@ with no access to this repo's source - the concrete blocker `ADR-015` resolves.
   schema's inferred provider API key, checkpointer `dsn_env`, and required optional extras.
 - [x] 3.5.4 - Root consumer files: `README.md`, `CONTRIBUTING.md`, `.env.example`.
 - [x] 3.5.5 - Docs suite refactor: `docs/GETTING_STARTED.md`, `docs/README.md` document-map update,
-  `ADR-015`, this Phase 3.5 section, `canvas/README.md` npm-consumer-mode section.
-- [x] 3.5.6 - Canvas runtime-config + npm CLI wrapper: `canvas/src/apiBase.ts` resolves
-  `window.__AGENTDRAFT_API_BASE__` as a fallback to `VITE_API_BASE`; new `canvas/bin/agentdraft-canvas.js`
-  serves the prebuilt bundle plus a `/agentdraft-config.js` route; `canvas/package.json` becomes
-  publishable (`ADR-015`).
-- [x] 3.5.7 - CI publish workflows: `publish-python.yml` (PyPI Trusted Publishing), `publish-canvas.yml`
-  (npm, `NPM_TOKEN`).
-- [ ] 3.5.8 - First real publish: a `v0.1.x` GitHub Release and a `canvas-v0.1.x` tag, verified from
-  a clean environment.
+  `ADR-015`, this Phase 3.5 section, `canvas/README.md`'s bundled-mode section.
+- [x] 3.5.6 - Canvas bundled into the wheel: new `hatch_build.py` Hatchling build hook runs
+  `npm ci && npm run build` in `canvas/` and copies the output into
+  `src/agentdraft/canvas_static/` (force-included in the wheel via `pyproject.toml`'s `artifacts`
+  config); `server.py` serves it alongside the existing API plus a `/agentdraft-config.js` route;
+  `canvas/src/apiBase.ts` resolves that runtime value with a fallback from `VITE_API_BASE`
+  (`ADR-015`).
+- [x] 3.5.7 - CI publish workflow: `publish-python.yml` (PyPI Trusted Publishing via OIDC), with
+  `actions/setup-node` so the build hook's `npm` calls succeed; `ci.yml`'s plain `pip install`
+  steps set `AGENTDRAFT_SKIP_CANVAS_BUILD=1` to stay fast and Node-version-independent.
+- [ ] 3.5.8 - First real publish: a `v0.1.x` GitHub Release, verified from a clean environment.
 
 **Exit criteria:** CI green; `pip install agent-draft` followed by `agentdraft init` and `agentdraft
-run` works end to end from a clean environment with no access to this repo's source; `npx
-agentdraft-canvas --api-base <url>` renders and edits against a real `agentdraft canvas` process
-with no local `npm install` of the canvas source required.
+run` works end to end from a clean environment with no access to this repo's source; `agentdraft
+canvas` renders and edits against that same install with no separate Node.js/npm step required.
 
 ## Phase 4+ - Meta-agent and AgentWeave
 

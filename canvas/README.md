@@ -3,10 +3,28 @@
 Visualization and editing of a compiled AgentDraft schema (Phase 2.1/2.2 — see
 [../docs/ROADMAP.md](../docs/ROADMAP.md), [../docs/ADRs.md](../docs/ADRs.md) ADR-007/ADR-008).
 
-Standalone React + TypeScript + Vite app, separate from the Python package. It has three modes,
-selected by whether an API base is configured (via `VITE_API_BASE` at build time, or
-`window.__AGENTDRAFT_API_BASE__` at runtime, `ADR-015`) - no code changes needed to switch between
-them.
+React + TypeScript + Vite app. Its prebuilt static assets ship bundled inside the `agent-draft`
+Python wheel (`ADR-015`) - most users never touch this directory at all, they just run
+`agentdraft canvas <schema.yaml>` (see the root [README](../README.md)). This directory is for
+building that bundle and for contributors working on the UI itself.
+
+It has three modes, selected by whether an API base is configured (via `VITE_API_BASE` at build
+time, or `window.__AGENTDRAFT_API_BASE__` at runtime, injected by `agentdraft canvas`'s own
+server, `ADR-015`) - no code changes needed to switch between them.
+
+## Bundled mode (what `agentdraft canvas` actually runs, Phase 3.5)
+
+Nothing to do here - `pip install agent-draft` already contains a prebuilt copy of this app.
+`agentdraft canvas <schema.yaml>` serves it directly, on the same port as the editing API:
+
+```sh
+agentdraft canvas schema.yaml   # open the URL it prints - that's it
+```
+
+`server.py` serves this directory's prebuilt `dist/` plus a synthetic `GET /agentdraft-config.js`
+route that sets `window.__AGENTDRAFT_API_BASE__ = ""` (same origin as the server itself) -
+`src/apiBase.ts` resolves that with a fallback from `VITE_API_BASE`, so this mode and the
+dev-server mode below share the same app code with no divergence.
 
 ## View-only mode (no backend, Phase 2.1)
 
@@ -24,26 +42,10 @@ agentdraft explain <schema.yaml> --format json > graph.json
 Open the running app and load `graph.json` via the file picker or drag-and-drop. No interface to
 the Python compiler beyond that one file — no backend process, no live connection.
 
-## npm consumer mode (published package, Phase 3.5, `ADR-015`)
-
-No repo clone needed. Start the editing API from the Python package, then point the published
-`agentdraft-canvas` package at it:
-
-```sh
-agentdraft canvas <schema.yaml>                       # prints its URL, e.g. http://127.0.0.1:54321
-npx agentdraft-canvas --api-base http://127.0.0.1:54321
-```
-
-`agentdraft-canvas` ships a prebuilt static bundle plus a thin Node server (`canvas/bin/agentdraft-canvas.js`)
-that serves it and injects the `--api-base` value at runtime via a `/agentdraft-config.js` route -
-this is why it doesn't need `VITE_API_BASE` (a Vite *build-time* env var, unusable for a single
-published bundle shared by every consumer). `src/App.tsx` resolves
-`import.meta.env.VITE_API_BASE ?? window.__AGENTDRAFT_API_BASE__`, so this mode and the dev-server
-mode below share the same app code with no divergence.
-
 ## Editing mode (local API server, from source, Phase 2.2)
 
-From the main repo, start the local editing API for a schema:
+For contributors iterating on the UI itself, with fast HMR against a real running API instead of a
+rebuild-and-reload cycle. From the main repo, start the local editing API for a schema:
 
 ```sh
 agentdraft canvas <schema.yaml>

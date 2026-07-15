@@ -95,26 +95,24 @@ point OTLP at.
 
 ## 8. The canvas (visual editor)
 
-Three ways to run it, from least to most setup:
-
-**a. Published npm package, against a running editing API** (no repo clone needed):
+The visual editor ships bundled into `agent-draft` itself (`ADR-015`) - no separate install, no
+Node.js needed:
 
 ```sh
-agentdraft canvas schema.yaml         # starts the local editing API, prints its URL
-npx agentdraft-canvas --api-base <url-it-printed>
+agentdraft canvas schema.yaml
 ```
 
-**b. From source, editing mode** (for canvas contributors, or before the npm package exists in
-your environment):
+This prints a URL - open it in a browser. It serves both the editing API and the UI on that one
+port, auto-loads `schema.yaml`, and lets you edit nodes/edges/routing and save back to the file.
+
+Two source-only alternatives, for canvas contributors or view-only inspection without any backend:
 
 ```sh
+# From source, editing mode (fast HMR while developing the UI itself)
 agentdraft canvas schema.yaml                              # in one terminal
 cd canvas && VITE_API_BASE=<url-it-printed> npm run dev    # in another
-```
 
-**c. From source, view-only mode** (no backend process at all):
-
-```sh
+# From source, view-only mode (no backend process at all)
 agentdraft explain schema.yaml --format json > graph.json
 cd canvas && npm run dev
 # then load graph.json via the file picker or drag-and-drop
