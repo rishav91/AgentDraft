@@ -1,4 +1,4 @@
-# Roadmap - AgentDraft
+# Roadmap - Agentic Graph Composer
 
 See [README](README.md) for the doc map.
 MVP-first, depth before breadth
@@ -20,7 +20,7 @@ the bar for calling the whole phase complete.
 **Goal:** prove schema → LangGraph compilation works at all, before investing in full Phase 1 scope.
 
 **What ships:** the thinnest possible slice - a YAML schema for a single node, single LLM call, no
-tools, no branching - compiled to a LangGraph `StateGraph` and run via a bare `agentdraft run`.
+tools, no branching - compiled to a LangGraph `StateGraph` and run via a bare `agc run`.
 No `validate`, no `explain`, no error-quality bar yet.
 
 **What it unlocks:** confidence that the schema → compiler → LangGraph pipeline is structurally
@@ -30,11 +30,11 @@ sound before building the rest of Phase 1 on top of it.
 
 - [x] 0.1 - Single-node schema and compiler: YAML with `schema_version` and one `llm`-bearing node,
   structurally validated and compiled to a straight-line `START → node → END` `StateGraph`.
-- [x] 0.2 - `agentdraft run` CLI wrapper, executed end-to-end, with a unit test on the compiler and
-  an e2e test on `agentdraft run` covering it.
+- [x] 0.2 - `agc run` CLI wrapper, executed end-to-end, with a unit test on the compiler and
+  an e2e test on `agc run` covering it.
 
 **Exit criteria:** CI green; the skeleton schema compiles and runs end-to-end at least once,
-with a unit test on the compiler and an e2e test on `agentdraft run` covering it.
+with a unit test on the compiler and an e2e test on `agc run` covering it.
 
 ## Phase 1 - CLI (the MVP)
 
@@ -55,7 +55,7 @@ signal on the project's central risk - see Sequencing rationale below.
 - [x] 1.1 - Multi-node graphs: `nodes` and `edges` sections compile to a `StateGraph` with matching
   structure (`FR-1.1`).
 - [x] 1.2 - Field-level validation errors (missing fields, dangling edge references, unrecognized
-  providers) and the `agentdraft validate` command (`FR-1.2`, remainder of `FR-1.3`, `FR-3.1`,
+  providers) and the `agc validate` command (`FR-1.2`, remainder of `FR-1.3`, `FR-3.1`,
   `NFR-2.1`).
 - [x] 1.3 - Tool bindings: a node's bound tools compile so the LLM can invoke them via LangGraph's
   native tool-calling mechanism (`FR-1.4`).
@@ -63,7 +63,7 @@ signal on the project's central risk - see Sequencing rationale below.
   routing behavior (`FR-1.5`).
 - [x] 1.5 - Custom-code escape hatch: a `handler: module:function` reference resolves to the
   callable at compile time, with a clear import error on failure (`FR-1.6`, `FR-2.2`, `ADR-004`).
-- [x] 1.6 - `agentdraft explain` command and the stable, documented exit-code taxonomy across
+- [x] 1.6 - `agc explain` command and the stable, documented exit-code taxonomy across
   `validate`/`run`/`explain` (`FR-3.3`, `FR-3.4`).
 - [x] 1.7 - Phase 1 exit bar: full `NFR-6.1`-`NFR-6.3` test coverage in place, and the
   schema-expressiveness metric (`PRD §6`) checked against at least one real, non-trivial agent.
@@ -80,10 +80,10 @@ is met, including `NFR-6.1`-`NFR-6.3` test coverage; the schema-expressiveness s
 ([PRD §1](PRD.md#1-problem)) - on a schema format already proven by real Phase 1 usage.
 
 **What shipped:** a visual renderer for a compiled schema's structure (nodes, edges, routing,
-tool bindings - the same structure `agentdraft explain` already prints as text), plus full
+tool bindings - the same structure `agc explain` already prints as text), plus full
 editing. 2.1's stack (`ADR-007`): a standalone React + TypeScript + Vite app (`canvas/`) using
-React Flow, reading a static `agentdraft explain --format json` (`FR-3.5`) export client-side -
-no backend process. 2.2's editing interface (`ADR-008`): a thin local API server (`agentdraft
+React Flow, reading a static `agc explain --format json` (`FR-3.5`) export client-side -
+no backend process. 2.2's editing interface (`ADR-008`): a thin local API server (`agc
 canvas <schema>`, `FR-4.3`) that parses saves through the same `Schema` pydantic model the CLI
 uses, so canvas and CLI validation can't drift apart. 2.3: Vitest + React Testing Library unit
 tests, and one Playwright e2e test driving the real local server through a real browser, both in
@@ -91,20 +91,20 @@ tests, and one Playwright e2e test driving the real local server through a real 
 
 **What it unlocks:** the tool's primary value proposition actually lands. The second named
 failure condition is now continuously tested, not just retired once: the Playwright e2e test
-(2.3) would fail if the canvas and `agentdraft validate` ever disagreed on what a valid edit looks
+(2.3) would fail if the canvas and `agc validate` ever disagreed on what a valid edit looks
 like ([PRD §7](PRD.md#7-risks)).
 
 **Sub-phases:**
 
 - [x] 2.1 - Read-only canvas: render a compiled schema's structure (nodes, edges, routing, tool
-  bindings) with no divergence from what `agentdraft explain` prints for the same schema.
+  bindings) with no divergence from what `agc explain` prints for the same schema.
 - [x] 2.2 - Editing capability: modify a graph visually and write the changes back to the schema.
 - [x] 2.3 - Canvas CI and sync guarantee: CI extended to cover canvas code (Vitest unit tests +
   a Playwright e2e test against the real local API server).
 
 **Exit criteria:** CI green (canvas code covered by a dedicated CI job); every construct the
 schema can express is renderable and editable in the canvas, with no divergence between what
-`agentdraft explain` prints and what the canvas shows/saves for the same schema.
+`agc explain` prints and what the canvas shows/saves for the same schema.
 
 **Known follow-up (deferred):** auto-layout for cyclic graphs (self-loops, reflection-style
 routing back to an earlier node, `FR-1.12`) produces crossing/looping edges - see `layout.ts`.
@@ -122,16 +122,16 @@ the cleanest actual fix for this class of graph.
 
 **Status:** Done.
 
-**Goal:** make a pip-installed AgentDraft agent trustworthy to run for real - resumable after a
+**Goal:** make a pip-installed Agentic Graph Composer agent trustworthy to run for real - resumable after a
 crash, inspectable after the fact, traceable externally, and guarded against silent behavioral
 regressions. All fully deterministic engineering: no natural-language generation risk, which is
 why this phase is sequenced before Phase 4's meta-agent (see Sequencing rationale below).
 
 **What ships:** an opt-in `checkpointer` schema block backed by LangGraph's own checkpointers
-(`FR-5`, `ADR-009`); local schema version history (`FR-9`); a local run ledger and `agentdraft
+(`FR-5`, `ADR-009`); local schema version history (`FR-9`); a local run ledger and `agc
 runs` commands (`FR-6`); OpenTelemetry spans with OTLP export, no bundled backend (`FR-7`,
-`ADR-011`); and a deterministic eval/regression harness, `agentdraft eval` (`FR-8`, `ADR-012`). All
-AgentDraft-owned local state lives in one shared SQLite file, no DB abstraction (`ADR-010`).
+`ADR-011`); and a deterministic eval/regression harness, `agc eval` (`FR-8`, `ADR-012`). All
+Agentic Graph Composer-owned local state lives in one shared SQLite file, no DB abstraction (`ADR-010`).
 
 **What it unlocks:** the tool becomes usable as a production dependency, not just an authoring
 aid - a crashed agent doesn't lose its progress, an operator can see what a run actually did
@@ -140,19 +140,19 @@ without reading stdout, and a schema edit that breaks behavior is caught before 
 **Sub-phases:**
 
 - [x] 3.1 - Checkpointing/resume: `checkpointer` schema block, `SqliteSaver`/`PostgresSaver`
-  passthrough, `agentdraft run --resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`). Built first -
+  passthrough, `agc run --resume <thread_id>` (`FR-5.1`-`FR-5.5`, `ADR-009`). Built first -
   establishes the shared local store (`ADR-010`) and the `thread_id` concept the later sub-phases
   correlate against.
-- [x] 3.2 - Schema version history: every `save_schema` call recorded as a revision; `agentdraft
+- [x] 3.2 - Schema version history: every `save_schema` call recorded as a revision; `agc
   schema log`/`diff` (`FR-9.1`-`FR-9.4`).
-- [x] 3.3 - Run history: every `agentdraft run` recorded to the local ledger; `agentdraft runs
+- [x] 3.3 - Run history: every `agc run` recorded to the local ledger; `agc runs
   list`/`show`/`prune` (`FR-6.1`-`FR-6.4`).
 - [x] 3.4 - Observability: OpenTelemetry spans per run/node, OTLP export via standard env vars,
   correlated with the run ledger's `run_id` (`FR-7.1`-`FR-7.4`, `ADR-011`, [OBSERVABILITY.md](OBSERVABILITY.md)).
-- [x] 3.5 - Eval harness: `agentdraft eval <schema> <evals-file>`, deterministic assertions,
+- [x] 3.5 - Eval harness: `agc eval <schema> <evals-file>`, deterministic assertions,
   new exit code `4` (`FR-8.1`-`FR-8.4`, `ADR-012`).
-- [x] 3.6 - Schema revert + resume schema-consistency guard: `agentdraft schema revert
-  <schema> <rev>` (additive, never destroys/reorders revisions, `ADR-013`); `agentdraft run
+- [x] 3.6 - Schema revert + resume schema-consistency guard: `agc schema revert
+  <schema> <rev>` (additive, never destroys/reorders revisions, `ADR-013`); `agc run
   --resume` fails if the schema changed since that thread's last recorded run, unless `--force`
   (`FR-9.5`, `FR-5.6`, `ADR-014`).
 
@@ -165,50 +165,50 @@ Phase 1 held itself to for schema expressiveness.
 
 **Status:** In progress - only 3.5.8 (the first real publish, a manual/human-gated step) remains.
 
-**Goal:** make AgentDraft actually installable by someone who isn't its author - a real PyPI
+**Goal:** make Agentic Graph Composer actually installable by someone who isn't its author - a real PyPI
 package with metadata, a scaffold command that gets a new user to a runnable agent in minutes, an
 environment-check command, and a canvas UI usable with no separate install. Non-blocking for Phase
 4 (the meta-agent's MCP server doesn't depend on public distribution existing), but sequenced
 before it: `FR-2.5` (compiler/schema logic as a plain library, the premise Phase 4's MCP server
-relies on) is exactly what makes AgentDraft worth publishing now, and wider exposure without a real
+relies on) is exactly what makes Agentic Graph Composer worth publishing now, and wider exposure without a real
 install/setup story would just generate confused first impressions.
 
-**What ships:** PyPI packaging metadata and a `LICENSE`/`CHANGELOG` (`ADR-015`); `agentdraft init`,
-a scaffold command; `agentdraft doctor`, an environment-check command; a root-level consumer docs
+**What ships:** PyPI packaging metadata and a `LICENSE`/`CHANGELOG` (`ADR-015`); `agc init`,
+a scaffold command; `agc doctor`, an environment-check command; a root-level consumer docs
 set (`README.md`, `CONTRIBUTING.md`, `.env.example`) and a `docs/GETTING_STARTED.md` setup guide;
 the canvas UI's prebuilt static assets bundled directly into the Python wheel via a Hatchling build
-hook, with `agentdraft canvas` serving both the API and the UI from one process (`ADR-015`); a CI
+hook, with `agc canvas` serving both the API and the UI from one process (`ADR-015`); a CI
 publish workflow.
 
-**What it unlocks:** `pip install agent-draft` followed by `agentdraft canvas <schema>` works for a
+**What it unlocks:** `pip install agentic-graph-composer` followed by `agc canvas <schema>` works for a
 stranger with no access to this repo's source and no Node.js install of their own - the concrete
 blocker `ADR-015` resolves.
 
 **Sub-phases:**
 
 - [x] 3.5.1 - Python packaging metadata: `pyproject.toml` readme/license/authors/classifiers/urls,
-  `LICENSE` (MIT), `CHANGELOG.md`. Distribution name `agent-draft` (the `agentdraft` PyPI name is
-  taken by an unrelated package; the `agentdraft` console script is unaffected).
-- [x] 3.5.2 - `agentdraft init [DEST] [--provider anthropic|openai] [--force]`: scaffolds a working
+  `LICENSE` (MIT), `CHANGELOG.md`. Distribution name `agentic-graph-composer` (the `agc` PyPI name is
+  taken by an unrelated package; the `agc` console script is unaffected).
+- [x] 3.5.2 - `agc init [DEST] [--provider anthropic|openai] [--force]`: scaffolds a working
   schema.yaml plus its supporting Python module(s) and a `.env.example`.
-- [x] 3.5.3 - `agentdraft doctor [SCHEMA_PATH]`: checks Python version, presence (never value) of a
+- [x] 3.5.3 - `agc doctor [SCHEMA_PATH]`: checks Python version, presence (never value) of a
   schema's inferred provider API key, checkpointer `dsn_env`, and required optional extras.
 - [x] 3.5.4 - Root consumer files: `README.md`, `CONTRIBUTING.md`, `.env.example`.
 - [x] 3.5.5 - Docs suite refactor: `docs/GETTING_STARTED.md`, `docs/README.md` document-map update,
   `ADR-015`, this Phase 3.5 section, `canvas/README.md`'s bundled-mode section.
 - [x] 3.5.6 - Canvas bundled into the wheel: new `hatch_build.py` Hatchling build hook runs
   `npm ci && npm run build` in `canvas/` and copies the output into
-  `src/agentdraft/canvas_static/` (force-included in the wheel via `pyproject.toml`'s `artifacts`
-  config); `server.py` serves it alongside the existing API plus a `/agentdraft-config.js` route;
+  `src/agc/canvas_static/` (force-included in the wheel via `pyproject.toml`'s `artifacts`
+  config); `server.py` serves it alongside the existing API plus a `/agc-config.js` route;
   `canvas/src/apiBase.ts` resolves that runtime value with a fallback from `VITE_API_BASE`
   (`ADR-015`).
 - [x] 3.5.7 - CI publish workflow: `publish-python.yml` (PyPI Trusted Publishing via OIDC), with
   `actions/setup-node` so the build hook's `npm` calls succeed; `ci.yml`'s plain `pip install`
-  steps set `AGENTDRAFT_SKIP_CANVAS_BUILD=1` to stay fast and Node-version-independent.
+  steps set `AGC_SKIP_CANVAS_BUILD=1` to stay fast and Node-version-independent.
 - [ ] 3.5.8 - First real publish: a `v0.1.x` GitHub Release, verified from a clean environment.
 
-**Exit criteria:** CI green; `pip install agent-draft` followed by `agentdraft init` and `agentdraft
-run` works end to end from a clean environment with no access to this repo's source; `agentdraft
+**Exit criteria:** CI green; `pip install agentic-graph-composer` followed by `agc init` and `agc
+run` works end to end from a clean environment with no access to this repo's source; `agc
 canvas` renders and edits against that same install with no separate Node.js/npm step required.
 
 ## Phase 4+ - Meta-agent and AgentWeave
@@ -224,34 +224,34 @@ Sequenced last because it's the least deterministic part of the system - it depe
 schema format, Phase 2's inspection surface, and Phase 3's version-history diff primitive
 (`FR-9.3`) all being stable enough to generate into, validate against, and diff.
 
-Current plan for the natural-language interface: an MCP server exposing AgentDraft's schema
+Current plan for the natural-language interface: an MCP server exposing Agentic Graph Composer's schema
 operations (create/edit nodes and edges, validate, explain, diff a schema) as MCP tools, so an
 existing agentic chat client (e.g. Claude Desktop, Claude Code) drives the iterative
-natural-language refinement loop, instead of AgentDraft building and prompting a bespoke
+natural-language refinement loop, instead of Agentic Graph Composer building and prompting a bespoke
 conversational agent. This is cheap specifically because `FR-2.5` ([requirements](requirements/system-requirements.md))
 keeps the compiler/schema logic in a plain library - the MCP server calls the same functions the
 CLI does, rather than shelling out to the CLI or duplicating logic. The `diff` tool this MCP server
-exposes is the same primitive Phase 3.2 already builds for `agentdraft schema diff` (`FR-9.3`), not
+exposes is the same primitive Phase 3.2 already builds for `agc schema diff` (`FR-9.3`), not
 a second implementation. Per the governing principle, the MCP server itself is still not built
 until this phase starts; `FR-2.5` is the only Phase 1 concession made in anticipation of it,
 because it's cheap now and expensive to retrofit later.
 
-- [ ] 4.1 - MCP server exposing AgentDraft's schema operations (create/edit nodes and edges,
+- [ ] 4.1 - MCP server exposing Agentic Graph Composer's schema operations (create/edit nodes and edges,
   validate, explain, diff) as MCP tools, calling the same library functions as the CLI (`FR-2.5`,
   `FR-9.3`).
 - [ ] 4.2 - Iterative natural-language refinement loop validated end-to-end: a real schema, built
-  via the MCP/chat loop rather than hand-authored, passes `agentdraft validate` without manual
+  via the MCP/chat loop rather than hand-authored, passes `agc validate` without manual
   fixup.
 
 **Exit criteria (meta-agent):** CI green, including tests on the MCP server's tool handlers; a
-real schema, built via the MCP/chat loop rather than hand-authored, passes `agentdraft validate`
+real schema, built via the MCP/chat loop rather than hand-authored, passes `agc validate`
 without manual fixup.
 
 ### 4.3 - AgentWeave
 
 A custom agent SDK, pursued for learning/control over agent execution internals,
 not because of a concrete LangGraph gap ([PRD §1](PRD.md#1-problem), `ADR-003`). Not on
-AgentDraft's critical path. Starts whenever the author chooses to pursue it - no dependency on
+Agentic Graph Composer's critical path. Starts whenever the author chooses to pursue it - no dependency on
 meta-agent, and no fixed trigger condition beyond "the author decides to build it." Once
 AgentWeave exists as a real second backend, the execution-backend interface, capability
 validation, and shared skills/MCP layer (all deferred per the governing principle, [README](README.md))
@@ -280,7 +280,7 @@ next phase is built on top of unproven ground:
 | 2 | Can a canvas represent everything the schema expresses, and stay in sync with it? (the named canvas failure condition, [PRD §7](PRD.md#7-risks)) |
 | 3 (production hardening) | Can a real agent survive a crash and resume correctly, and can a schema edit's behavioral impact be caught before it ships? Fully deterministic engineering, no new risk category - sequenced before the meta-agent precisely because it isn't the least-certain part of the system |
 | 4 (meta-agent) | Can natural language reliably generate and refine valid schemas? Deliberately tackled last - it's downstream of Phase 1-3's surfaces (schema format, inspection, diffing) all being stable |
-| 4+ (AgentWeave) | Not a risk to AgentDraft itself - a separate, parallel learning track that also happens to eventually enable the deferred backend-abstraction work |
+| 4+ (AgentWeave) | Not a risk to Agentic Graph Composer itself - a separate, parallel learning track that also happens to eventually enable the deferred backend-abstraction work |
 
 Building the backend-abstraction interface, capability validation, or the shared skills/MCP layer
 before Phase 4+ would mean designing them against zero real alternatives to LangGraph - exactly

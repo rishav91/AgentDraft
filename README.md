@@ -1,32 +1,32 @@
-# AgentDraft
+# Agentic Graph Composer
 
 A CLI- and canvas-first builder for AI agents on LangGraph.
-Define an agent as a declarative YAML schema; AgentDraft compiles it into a real LangGraph
+Define an agent as a declarative YAML schema; Agentic Graph Composer compiles it into a real LangGraph
 `StateGraph` - not a reimplementation of LangGraph, a thin, typed layer on top of it.
 
-[![PyPI](https://img.shields.io/pypi/v/agent-draft)](https://pypi.org/project/agent-draft/)
-[![CI](https://github.com/rishav91/AgentDraft/actions/workflows/ci.yml/badge.svg)](https://github.com/rishav91/AgentDraft/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/agentic-graph-composer)](https://pypi.org/project/agentic-graph-composer/)
+[![CI](https://github.com/rishav91/AgenticGraphComposer/actions/workflows/ci.yml/badge.svg)](https://github.com/rishav91/AgenticGraphComposer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Install
 
 ```sh
-pip install agent-draft
+pip install agentic-graph-composer
 ```
 
-This installs the `agentdraft` command.
+This installs the `agc` command.
 
 ## Quickstart
 
 ```sh
 mkdir my-agent && cd my-agent
-agentdraft init                       # scaffolds a working schema.yaml + starter files
+agc init                       # scaffolds a working schema.yaml + starter files
 cp .env.example .env                  # then fill in your provider's API key
-agentdraft validate schema.yaml
-agentdraft run schema.yaml "What does this project do?"
+agc validate schema.yaml
+agc run schema.yaml "What does this project do?"
 ```
 
-`agentdraft doctor schema.yaml` checks your environment (API keys, optional extras, checkpointer
+`agc doctor schema.yaml` checks your environment (API keys, optional extras, checkpointer
 config) against what a schema actually needs, before you hit a failure mid-run.
 
 ## The canvas (visual editor)
@@ -35,7 +35,7 @@ A visual editor for the graph a schema compiles to ships bundled in - no separat
 Node.js needed:
 
 ```sh
-agentdraft canvas schema.yaml
+agc canvas schema.yaml
 ```
 
 This prints a URL - open it in a browser to see and edit the graph, backed by the same
@@ -66,15 +66,15 @@ See [docs/README.md](docs/README.md) for the complete design-doc suite.
 ## Optional extras
 
 ```sh
-pip install "agent-draft[examples]"   # langchain-anthropic, langchain-openai - to run examples/
-pip install "agent-draft[postgres]"   # Postgres-backed checkpointing
+pip install "agentic-graph-composer[examples]"   # langchain-anthropic, langchain-openai - to run examples/
+pip install "agentic-graph-composer[postgres]"   # Postgres-backed checkpointing
 ```
 
 ## Learn more
 
 - [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) - the practical setup guide
 - [docs/README.md](docs/README.md) - architecture, ADRs, requirements, roadmap
-- [CONTRIBUTING.md](CONTRIBUTING.md) - developing AgentDraft itself
+- [CONTRIBUTING.md](CONTRIBUTING.md) - developing Agentic Graph Composer itself
 - [CHANGELOG.md](CHANGELOG.md)
 
 ## License

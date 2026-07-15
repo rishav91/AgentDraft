@@ -1,8 +1,8 @@
-# AgentDraft — Design Docs
+# Agentic Graph Composer - Design Docs
 
 ## What this is
 
-AgentDraft is a CLI- and canvas-first builder for AI agents on LangGraph: agents are defined as a
+Agentic Graph Composer is a CLI- and canvas-first builder for AI agents on LangGraph: agents are defined as a
 declarative YAML schema, compiled into a real LangGraph `StateGraph`, rather than hand-written as
 graph code. The single most important scope decision: **the build is phased and each phase is
 independently valuable** — a CLI (schema + compiler, Phase 1), then a canvas (Phase 2, the
@@ -13,9 +13,9 @@ version/run history, observability, evals), then a meta-agent and an optional cu
 ## Governing principle
 
 **Never build a backend abstraction or interface until there are two concrete, real consumers that
-need it.** AgentDraft compiles and runs directly against LangGraph — no execution-backend
+need it.** Agentic Graph Composer compiles and runs directly against LangGraph - no execution-backend
 interface, no backend-capability validation, no backend-neutral skills/MCP layer — until AgentWeave
-exists as a real second backend and forces the seam (`ADR-003`). This extends to AgentDraft-owned
+exists as a real second backend and forces the seam (`ADR-003`). This extends to Agentic Graph Composer-owned
 local storage (`ADR-010`): no swappable-DB abstraction until a second concrete backend need exists.
 Where an upstream library already provides multi-backend support with real consumers - LangChain's
 provider registry (`ADR-005`), LangGraph's checkpointers (`ADR-009`) - a thin passthrough config
@@ -26,8 +26,8 @@ this project is settled by this rule.
 |---|---|---|
 | Execution backend | Compile/run directly against LangGraph | Execution-backend interface, capability validation (until AgentWeave is real) |
 | Tools | N/A - no second backend to be neutral toward | Backend-neutral skills/MCP layer (until AgentWeave is real) |
-| Checkpointing | LangGraph's own `SqliteSaver`/`PostgresSaver`, exposed via a config field (`ADR-009`) | An AgentDraft-built checkpoint format - never planned |
-| AgentDraft-owned local storage (version history, run ledger) | One shared SQLite file (`ADR-010`) | A swappable-DB abstraction (until a second backend need exists) |
+| Checkpointing | LangGraph's own `SqliteSaver`/`PostgresSaver`, exposed via a config field (`ADR-009`) | An Agentic Graph Composer-built checkpoint format - never planned |
+| Agentic Graph Composer-owned local storage (version history, run ledger) | One shared SQLite file (`ADR-010`) | A swappable-DB abstraction (until a second backend need exists) |
 | Observability sink | Standard OTLP export (`ADR-011`) | A bundled trace-storage/UI backend - excluded by design, not deferred |
 
 ## Locked stack / key constraints
@@ -35,7 +35,7 @@ this project is settled by this rule.
 - **Language:** Python (`ADR-002`)
 - **Schema format:** YAML (`ADR-001`), with a required `schema_version` field (`ADR-006`)
 - **Escape hatch:** typed custom-code node/edge referencing a user-supplied Python callable, for logic the schema can't declare (`ADR-004`)
-- **LLM provider:** agnostic — schema's `provider`/`model` fields map onto LangChain's existing multi-provider interface, not an AgentDraft-built abstraction (`ADR-005`)
+- **LLM provider:** agnostic - schema's `provider`/`model` fields map onto LangChain's existing multi-provider interface, not an Agentic Graph Composer-built abstraction (`ADR-005`)
 - **Deployment:** local-first, single-user, no auth/hosting/multi-tenancy in the current roadmap horizon — architecture stays open to a hosted/collab version later, not designed against it yet
 - **Local persistence:** stdlib `sqlite3`, one shared file, no ORM (`ADR-010`); checkpointing additionally supports Postgres via LangGraph's own checkpointer (`ADR-009`)
 - **Observability:** OpenTelemetry SDK for instrumentation; no bundled backend (`ADR-011`)
