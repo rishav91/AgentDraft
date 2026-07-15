@@ -8,7 +8,7 @@ and this project uses [Semantic Versioning](https://semver.org/).
 The Python package is `agentic-graph-composer` on PyPI, importable as `agc`. The
 canvas UI ships bundled inside it - see `docs/ADRs.md` (ADR-015).
 
-## [Unreleased]
+## [0.1.0] - 2026-07-16
 
 ### Added
 
