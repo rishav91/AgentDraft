@@ -163,7 +163,7 @@ Phase 1 held itself to for schema expressiveness.
 
 ## Phase 3.5 - Public distribution
 
-**Status:** In progress - only 3.5.8 (the first real publish, a manual/human-gated step) remains.
+**Status:** Done.
 
 **Goal:** make Agentic Graph Composer actually installable by someone who isn't its author - a real PyPI
 package with metadata, a scaffold command that gets a new user to a runnable agent in minutes, an
@@ -187,8 +187,9 @@ blocker `ADR-015` resolves.
 **Sub-phases:**
 
 - [x] 3.5.1 - Python packaging metadata: `pyproject.toml` readme/license/authors/classifiers/urls,
-  `LICENSE` (MIT), `CHANGELOG.md`. Distribution name `agentic-graph-composer` (the `agc` PyPI name is
-  taken by an unrelated package; the `agc` console script is unaffected).
+  `LICENSE` (MIT), `CHANGELOG.md`. Distribution name `agentic-graph-composer` (PyPI's typosquat-
+  similarity check rejected the originally-planned `agent-draft`/`agentdraft` names as too close to
+  an unrelated existing package, prompting a full project rename - see `ADR-015`).
 - [x] 3.5.2 - `agc init [DEST] [--provider anthropic|openai] [--force]`: scaffolds a working
   schema.yaml plus its supporting Python module(s) and a `.env.example`.
 - [x] 3.5.3 - `agc doctor [SCHEMA_PATH]`: checks Python version, presence (never value) of a
@@ -205,7 +206,9 @@ blocker `ADR-015` resolves.
 - [x] 3.5.7 - CI publish workflow: `publish-python.yml` (PyPI Trusted Publishing via OIDC), with
   `actions/setup-node` so the build hook's `npm` calls succeed; `ci.yml`'s plain `pip install`
   steps set `AGC_SKIP_CANVAS_BUILD=1` to stay fast and Node-version-independent.
-- [ ] 3.5.8 - First real publish: a `v0.1.x` GitHub Release, verified from a clean environment.
+- [x] 3.5.8 - First real publish: `v0.1.0` GitHub Release (2026-07-16), published to PyPI as
+  `agentic-graph-composer` via Trusted Publishing, verified end to end from a clean environment
+  (`pip install`, `agc init`, `agc doctor`, and `agc canvas`'s bundled UI/API all confirmed working).
 
 **Exit criteria:** CI green; `pip install agentic-graph-composer` followed by `agc init` and `agc
 run` works end to end from a clean environment with no access to this repo's source; `agc
