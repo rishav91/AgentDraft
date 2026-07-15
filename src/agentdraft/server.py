@@ -7,6 +7,7 @@ Ctrl+C.
 """
 
 import json
+import mimetypes
 from collections.abc import Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,12 +25,42 @@ from agentdraft.schema import (
     save_schema,
 )
 
+# Bundled canvas UI (ADR-015), populated by hatch_build.py at wheel-build
+# time - absent in a source checkout that never ran `npm run build`, or a
+# dev install with AGENTDRAFT_SKIP_CANVAS_BUILD set; _resolve_static_file
+# degrades to None in that case rather than raising.
+_STATIC_DIR = Path(__file__).resolve().parent / "canvas_static"
+
 
 def _relative_path(path: Path, root: Path) -> str:
     try:
         return str(path.resolve().relative_to(root.resolve()))
     except ValueError:
         return str(path)
+
+
+def _resolve_static_file(url_path: str) -> tuple[bytes, str] | None:
+    """Resolve URL_PATH to (body, content_type) under the bundled canvas UI.
+
+    Falls back to index.html for any path with no matching file (this app
+    has no client-side routing today, but a direct load/refresh of any path
+    should still work) - or refuses to serve anything outside _STATIC_DIR
+    (path traversal). Returns None if the canvas UI isn't bundled into this
+    install at all, or no fallback index.html exists either.
+    """
+    if not _STATIC_DIR.is_dir():
+        return None
+
+    static_root = _STATIC_DIR.resolve()
+    relative = url_path.lstrip("/") or "index.html"
+    candidate = (static_root / relative).resolve()
+    if not candidate.is_relative_to(static_root) or not candidate.is_file():
+        candidate = static_root / "index.html"
+    if not candidate.is_file():
+        return None
+
+    content_type, _ = mimetypes.guess_type(str(candidate))
+    return candidate.read_bytes(), content_type or "application/octet-stream"
 
 
 def _handler_for(
@@ -51,8 +82,36 @@ def _handler_for(
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
 
+        def _serve_static_or_config(self, url_path: str) -> None:
+            if url_path == "/agentdraft-config.js":
+                # Empty string = "same origin" (this server, ADR-015) - the
+                # canvas app treats a *configured but empty* value differently
+                # from an unset one, so this must never be omitted/undefined.
+                body = b'window.__AGENTDRAFT_API_BASE__ = "";\n'
+                self.send_response(200)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Type", "text/javascript; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            static = _resolve_static_file(url_path)
+            if static is None:
+                self._write_json(
+                    404, {"errors": ["canvas UI is not bundled into this install (ADR-015)"]}
+                )
+                return
+            body, content_type = static
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Type", content_type)
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self) -> None:
             parsed = urlsplit(self.path)
+            if not parsed.path.startswith("/api/"):
+                self._serve_static_or_config(parsed.path)
+                return
             if parsed.path == "/api/providers":
                 self._write_json(200, {"providers": SUPPORTED_PROVIDERS})
                 return
@@ -176,12 +235,16 @@ def run_canvas_server(
     port: int = 0,
     scan_dirs: Sequence[Path] = (),
 ) -> None:
-    """Serve SCHEMA_PATH's graph over a local HTTP API until interrupted (FR-4.3)."""
+    """Serve SCHEMA_PATH's graph over a local HTTP API until interrupted (FR-4.3).
+
+    Also serves the bundled canvas UI (ADR-015) at the same URL, when one was
+    bundled into this install - see `_resolve_static_file`.
+    """
     server = create_server(schema_path, host=host, port=port, scan_dirs=scan_dirs)
     url = f"http://{host}:{server.server_address[1]}"
     print(f"AGENTDRAFT_CANVAS_URL={url}")
-    print(f"agentdraft canvas API running at {url}")
-    print(f"Point the canvas app at it: cd canvas && VITE_API_BASE={url} npm run dev")
+    print(f"agentdraft canvas running at {url} - open it in a browser")
+    print(f"(developing the canvas itself? cd canvas && VITE_API_BASE={url} npm run dev)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
