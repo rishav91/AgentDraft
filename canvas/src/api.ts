@@ -26,7 +26,7 @@ export async function fetchGraph(apiBase: string): Promise<GraphStructure> {
   }
   const data: unknown = await response.json();
   if (!isGraphStructure(data)) {
-    throw new Error("agentdraft canvas API returned an unexpected shape for /api/graph");
+    throw new Error("agc canvas API returned an unexpected shape for /api/graph");
   }
   return data;
 }
@@ -145,7 +145,7 @@ export async function openSchema(apiBase: string, path: string): Promise<OpenRes
   if (!isGraphStructure(data)) {
     return {
       ok: false,
-      errors: ["agentdraft canvas API returned an unexpected shape for /api/open"],
+      errors: ["agc canvas API returned an unexpected shape for /api/open"],
     };
   }
   return { ok: true, structure: data };

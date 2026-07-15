@@ -44,7 +44,7 @@ describe("FileLoader", () => {
     await user.upload(input, jsonFile("graph.json", JSON.stringify({ hello: "world" })));
 
     await waitFor(() =>
-      expect(screen.getByText(/doesn't look like an .agentdraft explain/)).toBeInTheDocument(),
+      expect(screen.getByText(/doesn't look like an .agc explain/)).toBeInTheDocument(),
     );
     expect(onLoad).not.toHaveBeenCalled();
   });

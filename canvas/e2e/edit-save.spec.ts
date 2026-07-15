@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // End-to-end coverage for Phase 2.2's real edit -> save -> disk round trip
-// (ROADMAP 2.3). Drives the actual `agentdraft canvas` server (not a mock),
+// (ROADMAP 2.3). Drives the actual `agc canvas` server (not a mock),
 // against a temp copy of the comprehensive fixture, through a real browser.
 // One representative happy path, not an exhaustive suite.
 
@@ -48,17 +48,17 @@ function waitForLine(
 }
 
 test.beforeAll(async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), "agentdraft-canvas-e2e-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "agc-canvas-e2e-"));
   schemaPath = path.join(dir, "schema.yaml");
   copyFileSync(FIXTURE, schemaPath);
 
   const noColorEnv = { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" };
 
-  apiProcess = spawn("agentdraft", ["canvas", schemaPath, "--port", "0"], {
+  apiProcess = spawn("agc", ["canvas", schemaPath, "--port", "0"], {
     cwd: REPO_ROOT,
     env: { ...noColorEnv, PYTHONUNBUFFERED: "1" },
   });
-  const [, url] = await waitForLine(apiProcess, /AGENTDRAFT_CANVAS_URL=(\S+)/);
+  const [, url] = await waitForLine(apiProcess, /AGC_CANVAS_URL=(\S+)/);
   apiUrl = url;
 
   viteProcess = spawn("npm", ["run", "dev", "--", "--port", String(VITE_PORT), "--strictPort"], {
@@ -92,6 +92,6 @@ test("add a node, wire an edge, save, and confirm it persists to disk", async ({
   const saved = readFileSync(schemaPath, "utf-8");
   expect(saved).toContain("id: responder");
 
-  const validate = spawnSync("agentdraft", ["validate", schemaPath], { cwd: REPO_ROOT });
+  const validate = spawnSync("agc", ["validate", schemaPath], { cwd: REPO_ROOT });
   expect(validate.status).toBe(0);
 });

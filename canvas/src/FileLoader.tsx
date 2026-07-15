@@ -17,7 +17,7 @@ export function FileLoader({ onLoad }: FileLoaderProps) {
         const text = await file.text();
         const parsed: unknown = JSON.parse(text);
         if (!isGraphStructure(parsed)) {
-          setError("That file doesn't look like an `agentdraft explain --format json` export.");
+          setError("That file doesn't look like an `agc explain --format json` export.");
           return;
         }
         onLoad(parsed);
@@ -45,9 +45,9 @@ export function FileLoader({ onLoad }: FileLoaderProps) {
       onDragLeave={() => setDragActive(false)}
       onDrop={onDrop}
     >
-      <h1>AgentDraft Canvas</h1>
+      <h1>Agentic Graph Composer Canvas</h1>
       <p>
-        Load a graph exported with <code>agentdraft explain &lt;schema&gt; --format json</code>.
+        Load a graph exported with <code>agc explain &lt;schema&gt; --format json</code>.
       </p>
       <label className="file-loader__button">
         Choose file
