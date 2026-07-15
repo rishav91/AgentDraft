@@ -25,10 +25,10 @@ from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from agentdraft.loader import HandlerResolutionError, resolve_reference
-from agentdraft.observability import node_span, record_token_usage
-from agentdraft.schema import Checkpointer, Edge, Node, Schema
-from agentdraft.store import ensure_local_store_dir
+from agc.loader import HandlerResolutionError, resolve_reference
+from agc.observability import node_span, record_token_usage
+from agc.schema import Checkpointer, Edge, Node, Schema
+from agc.store import ensure_local_store_dir
 
 _SENTINELS = {"START": START, "END": END}
 
@@ -107,7 +107,7 @@ def _with_tracing(
 ) -> Callable[[AgentState], dict[str, Any]]:
     """Wrap NODE_ID's node function in an OpenTelemetry span (`FR-7.1`), attaching
     token-usage attributes from its response when present (`FR-7.2`). A no-op
-    span (`agentdraft.observability`'s default when no OTLP endpoint is
+    span (`agc.observability`'s default when no OTLP endpoint is
     configured) makes this effectively free (`NFR-8.1`).
     """
 
@@ -167,7 +167,7 @@ def _build_postgres_checkpointer(checkpointer: Checkpointer) -> BaseCheckpointSa
     except ImportError as exc:
         raise CompileError(
             "checkpointer.backend: 'postgres' requires the optional postgres extra - "
-            "install with `pip install agentdraft[postgres]`"
+            "install with `pip install agc[postgres]`"
         ) from exc
     conn = Connection.connect(dsn, autocommit=True, prepare_threshold=0, row_factory=dict_row)
     saver = PostgresSaver(conn)
@@ -177,7 +177,7 @@ def _build_postgres_checkpointer(checkpointer: Checkpointer) -> BaseCheckpointSa
 
 def build_checkpointer(checkpointer: Checkpointer | None) -> BaseCheckpointSaver[str] | None:
     """Construct the LangGraph-native checkpointer a schema's `checkpointer` block asks for
-    (`FR-5.1`, `ADR-009`) - AgentDraft builds no checkpoint format of its own.
+    (`FR-5.1`, `ADR-009`) - Agentic Graph Composer builds no checkpoint format of its own.
     """
     if checkpointer is None:
         return None

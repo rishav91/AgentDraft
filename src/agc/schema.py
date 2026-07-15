@@ -1,4 +1,4 @@
-"""Schema types and loading for AgentDraft.
+"""Schema types and loading for Agentic Graph Composer.
 
 Phase 1 scope: multi-node graphs with explicit edges (FR-1.1); a node is
 either LLM-backed (`llm`, with optional `tools`, FR-1.4) or custom-code
@@ -14,7 +14,7 @@ import yaml
 from langchain.chat_models.base import _SUPPORTED_PROVIDERS
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from agentdraft.versions import record_revision
+from agc.versions import record_revision
 
 # Sorted, public re-export of the same set _check_providers validates against
 # (FR-1.3, ADR-005) - the canvas's provider dropdown reads this (FR-4.6) so it
@@ -109,7 +109,7 @@ class Edge(BaseModel):
 
 class Checkpointer(BaseModel):
     """Opt-in checkpointing config (`FR-5.1`, `ADR-009`) - a thin passthrough to
-    LangGraph's own `SqliteSaver`/`PostgresSaver`, not an AgentDraft-built abstraction.
+    LangGraph's own `SqliteSaver`/`PostgresSaver`, not an Agentic Graph Composer-built abstraction.
     """
 
     backend: Literal["sqlite", "postgres"] = "sqlite"
@@ -140,8 +140,8 @@ class Schema(BaseModel):
     def _check_version(self) -> "Schema":
         if self.schema_version != SUPPORTED_SCHEMA_VERSION:
             raise ValueError(
-                f"schema_version: unsupported value {self.schema_version!r} - this AgentDraft "
-                f"build supports schema_version {SUPPORTED_SCHEMA_VERSION}"
+                f"schema_version: unsupported value {self.schema_version!r} - this build "
+                f"supports schema_version {SUPPORTED_SCHEMA_VERSION}"
             )
         return self
 

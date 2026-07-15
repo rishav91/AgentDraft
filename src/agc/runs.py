@@ -1,5 +1,5 @@
-"""Local run ledger (`FR-6`, `ADR-010`): one row per `agentdraft run` invocation
-that reaches actual graph execution, in the shared `.agentdraft/state.db` file
+"""Local run ledger (`FR-6`, `ADR-010`): one row per `agc run` invocation
+that reaches actual graph execution, in the shared `.agc/state.db` file
 also used by checkpointing (`ADR-009`) and schema version history (`FR-9`).
 Complements observability ([OBSERVABILITY.md](../../docs/OBSERVABILITY.md)) as the
 always-on, zero-config local record of a run - useful even with no external
@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from agentdraft.store import ensure_local_store_dir
+from agc.store import ensure_local_store_dir
 
 RUNNING = "running"
 COMPLETED = "completed"

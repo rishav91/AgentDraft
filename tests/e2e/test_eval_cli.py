@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 from langchain_core.messages import AIMessage
 
-from agentdraft.cli import main
+from agc.cli import main
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 SCHEMA_FIXTURE = FIXTURES / "skeleton.yaml"
@@ -17,7 +17,7 @@ EVALS_BAD_SCHEMA_PATH = FIXTURES / "evals_bad_schema_path.yaml"
 EVALS_MISSING_CASES = FIXTURES / "evals_missing_cases.yaml"
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_eval_all_cases_pass_exits_0(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="Hello, world!")
@@ -31,7 +31,7 @@ def test_eval_all_cases_pass_exits_0(mock_init_chat_model: MagicMock) -> None:
     assert "[FAIL]" not in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_eval_a_failing_assertion_exits_4(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="Hello, world!")
@@ -46,7 +46,7 @@ def test_eval_a_failing_assertion_exits_4(mock_init_chat_model: MagicMock) -> No
     assert "[FAIL] equals assertion fails" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_eval_malformed_evals_file_exits_1_before_schema_loads(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -91,7 +91,7 @@ def test_eval_exits_2_on_compile_error() -> None:
     assert "Traceback" not in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_eval_exits_3_on_runtime_error(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.side_effect = RuntimeError("the LLM provider blew up")

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agentdraft.versions import (
+from agc.versions import (
     RevisionNotFoundError,
     diff_revisions,
     get_revision,
@@ -12,7 +12,7 @@ from agentdraft.versions import (
 )
 
 # tests/conftest.py's autouse _isolate_cwd fixture already sandboxes every test's
-# cwd (and so .agentdraft/) into its own tmp_path.
+# cwd (and so .agc/) into its own tmp_path.
 
 
 def test_record_revision_creates_revision_one() -> None:

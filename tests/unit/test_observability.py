@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentdraft import observability
-from agentdraft.observability import (
+from agc import observability
+from agc.observability import (
     _build_provider,
     _ensure_provider_configured,
     node_span,
@@ -51,7 +51,7 @@ def test_build_provider_defaults_service_name(monkeypatch: pytest.MonkeyPatch) -
     provider = _build_provider()
 
     assert provider is not None
-    assert provider.resource.attributes["service.name"] == "agentdraft"
+    assert provider.resource.attributes["service.name"] == "agc"
 
 
 def test_build_provider_falls_back_to_traces_specific_endpoint(
@@ -64,7 +64,7 @@ def test_build_provider_falls_back_to_traces_specific_endpoint(
 
 
 def test_ensure_provider_configured_calls_build_provider_at_most_once() -> None:
-    with patch("agentdraft.observability._build_provider", return_value=None) as mock_build:
+    with patch("agc.observability._build_provider", return_value=None) as mock_build:
         _ensure_provider_configured()
         _ensure_provider_configured()
 
@@ -73,7 +73,7 @@ def test_ensure_provider_configured_calls_build_provider_at_most_once() -> None:
 
 def test_shutdown_tracing_calls_shutdown_when_available() -> None:
     fake_provider = MagicMock()
-    with patch("agentdraft.observability.trace.get_tracer_provider", return_value=fake_provider):
+    with patch("agc.observability.trace.get_tracer_provider", return_value=fake_provider):
         shutdown_tracing()
 
     fake_provider.shutdown.assert_called_once()
@@ -82,7 +82,7 @@ def test_shutdown_tracing_calls_shutdown_when_available() -> None:
 def test_shutdown_tracing_swallows_exceptions() -> None:
     fake_provider = MagicMock()
     fake_provider.shutdown.side_effect = RuntimeError("network down")
-    with patch("agentdraft.observability.trace.get_tracer_provider", return_value=fake_provider):
+    with patch("agc.observability.trace.get_tracer_provider", return_value=fake_provider):
         shutdown_tracing()  # must not raise
 
 
@@ -90,7 +90,7 @@ def test_shutdown_tracing_noop_when_provider_has_no_shutdown() -> None:
     class NoShutdown:
         pass
 
-    with patch("agentdraft.observability.trace.get_tracer_provider", return_value=NoShutdown()):
+    with patch("agc.observability.trace.get_tracer_provider", return_value=NoShutdown()):
         shutdown_tracing()  # must not raise
 
 
@@ -99,9 +99,9 @@ def test_record_token_usage_sets_attributes() -> None:
 
     record_token_usage(span, {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15})
 
-    span.set_attribute.assert_any_call("agentdraft.tokens.prompt", 10)
-    span.set_attribute.assert_any_call("agentdraft.tokens.completion", 5)
-    span.set_attribute.assert_any_call("agentdraft.tokens.total", 15)
+    span.set_attribute.assert_any_call("agc.tokens.prompt", 10)
+    span.set_attribute.assert_any_call("agc.tokens.completion", 5)
+    span.set_attribute.assert_any_call("agc.tokens.total", 15)
 
 
 def test_record_token_usage_noop_when_usage_is_none() -> None:
@@ -117,7 +117,7 @@ def test_record_token_usage_skips_missing_keys() -> None:
 
     record_token_usage(span, {"input_tokens": 10})
 
-    span.set_attribute.assert_called_once_with("agentdraft.tokens.prompt", 10)
+    span.set_attribute.assert_called_once_with("agc.tokens.prompt", 10)
 
 
 def test_run_span_yields_a_span() -> None:

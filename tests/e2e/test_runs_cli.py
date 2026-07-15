@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 from langchain_core.messages import AIMessage
 
-from agentdraft.cli import main
+from agc.cli import main
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "skeleton.yaml"
 CHECKPOINTED_FIXTURE = Path(__file__).parent.parent / "fixtures" / "checkpointed.yaml"
@@ -18,7 +18,7 @@ def test_runs_list_reports_none_recorded() -> None:
     assert "no recorded runs" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_list_shows_a_completed_run(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="hi")
@@ -36,7 +36,7 @@ def test_runs_list_shows_a_completed_run(mock_init_chat_model: MagicMock) -> Non
     assert str(FIXTURE) in list_result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_list_filters_by_schema_path(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="hi")
@@ -57,7 +57,7 @@ def test_runs_list_filters_by_schema_path(mock_init_chat_model: MagicMock) -> No
     assert "other.yaml" in lines[0]
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_show_prints_full_detail(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="hi there")
@@ -78,7 +78,7 @@ def test_runs_show_prints_full_detail(mock_init_chat_model: MagicMock) -> None:
     assert "chat: completed" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_show_includes_thread_id_hint_when_checkpointed(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -100,7 +100,7 @@ def test_runs_show_includes_thread_id_hint_when_checkpointed(
     assert f"--resume {thread_id}" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_show_includes_error_for_a_failed_run(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.side_effect = RuntimeError("boom")
@@ -142,7 +142,7 @@ def test_runs_prune_rejects_a_malformed_duration() -> None:
     assert result.exit_code != 0
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_prune_older_than_valid_duration_keeps_recent_runs(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -162,7 +162,7 @@ def test_runs_prune_older_than_valid_duration_keeps_recent_runs(
     assert "no recorded runs" not in remaining.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_runs_prune_keep_last_deletes_older_runs(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="hi")

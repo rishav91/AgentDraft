@@ -1,11 +1,11 @@
 # A real, non-trivial single-agent, tool-calling agent (PRD §6 schema-expressiveness
-# check): answers questions about AgentDraft itself by searching its own docs/
+# check): answers questions about Agentic Graph Composer itself by searching its own docs/
 # directory, with zero custom-code escape-hatch usage.
 #
 # Run it (needs a real ANTHROPIC_API_KEY):
-#   agentdraft validate examples/docs_qa.yaml
-#   agentdraft explain examples/docs_qa.yaml
-#   agentdraft run examples/docs_qa.yaml "What does the roadmap say about Phase 2?"
+#   agc validate examples/docs_qa.yaml
+#   agc explain examples/docs_qa.yaml
+#   agc run examples/docs_qa.yaml "What does the roadmap say about Phase 2?"
 schema_version: 1
 nodes:
   - id: assistant
@@ -13,7 +13,7 @@ nodes:
       provider: anthropic
       model: claude-sonnet-5
       system: >
-        You answer questions about the AgentDraft project using its own design docs.
+        You answer questions about the Agentic Graph Composer project using its own design docs.
         Call search_docs to find relevant lines before answering, and say you don't
         know if nothing relevant turns up rather than guessing.
     tools:

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 from langchain_core.messages import AIMessage
 
-from agentdraft.cli import main
+from agc.cli import main
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "skeleton.yaml"
 TOOL_FIXTURE = Path(__file__).parent.parent / "fixtures" / "tool_calling.yaml"
@@ -17,8 +17,8 @@ CHECKPOINTED_MULTI_NODE_FIXTURE = (
 )
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_end_to_end(mock_init_chat_model: MagicMock) -> None:
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_end_to_end(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="Hello, world!")
     mock_init_chat_model.return_value = mock_llm
@@ -31,8 +31,8 @@ def test_agentdraft_run_end_to_end(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.assert_called_once_with("claude-sonnet-5", model_provider="anthropic")
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_with_token_usage_metadata_still_succeeds(
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_with_token_usage_metadata_still_succeeds(
     mock_init_chat_model: MagicMock,
 ) -> None:
     """FR-7.2: a response exposing usage_metadata is attached to the node's
@@ -52,8 +52,8 @@ def test_agentdraft_run_with_token_usage_metadata_still_succeeds(
     assert "[chat] Hello, world!" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_with_tool_call_end_to_end(mock_init_chat_model: MagicMock) -> None:
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_with_tool_call_end_to_end(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.bind_tools.return_value = mock_llm
     mock_llm.invoke.side_effect = [
@@ -72,14 +72,14 @@ def test_agentdraft_run_with_tool_call_end_to_end(mock_init_chat_model: MagicMoc
     assert "[chat] echoed: hi" in result.output
 
 
-def test_agentdraft_run_fails_on_missing_schema_file() -> None:
+def test_agc_run_fails_on_missing_schema_file() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["run", "does-not-exist.yaml", "hi"])
 
     assert result.exit_code != 0
 
 
-def test_agentdraft_run_exits_1_on_invalid_schema() -> None:
+def test_agc_run_exits_1_on_invalid_schema() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["run", str(BAD_PROVIDER_FIXTURE), "hi"])
 
@@ -87,7 +87,7 @@ def test_agentdraft_run_exits_1_on_invalid_schema() -> None:
     assert "Traceback" not in result.output
 
 
-def test_agentdraft_run_exits_2_on_compile_error() -> None:
+def test_agc_run_exits_2_on_compile_error() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["run", str(BAD_HANDLER_FIXTURE), "hi"])
 
@@ -96,8 +96,8 @@ def test_agentdraft_run_exits_2_on_compile_error() -> None:
     assert "Traceback" not in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_exits_3_on_runtime_error(mock_init_chat_model: MagicMock) -> None:
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_exits_3_on_runtime_error(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.side_effect = RuntimeError("the LLM provider blew up")
     mock_init_chat_model.return_value = mock_llm
@@ -109,7 +109,7 @@ def test_agentdraft_run_exits_3_on_runtime_error(mock_init_chat_model: MagicMock
     assert "the LLM provider blew up" in result.output
 
 
-def test_agentdraft_run_without_message_or_resume_exits_1() -> None:
+def test_agc_run_without_message_or_resume_exits_1() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["run", str(FIXTURE)])
 
@@ -117,7 +117,7 @@ def test_agentdraft_run_without_message_or_resume_exits_1() -> None:
     assert "MESSAGE is required" in result.output
 
 
-def test_agentdraft_run_resume_without_checkpointer_configured_exits_1() -> None:
+def test_agc_run_resume_without_checkpointer_configured_exits_1() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["run", str(FIXTURE), "--resume", "some-thread-id"])
 
@@ -125,8 +125,8 @@ def test_agentdraft_run_resume_without_checkpointer_configured_exits_1() -> None
     assert "requires the schema to declare a `checkpointer` block" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_resume_unknown_thread_id_exits_1(mock_init_chat_model: MagicMock) -> None:
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_resume_unknown_thread_id_exits_1(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_init_chat_model.return_value = mock_llm
 
@@ -140,8 +140,8 @@ def test_agentdraft_run_resume_unknown_thread_id_exits_1(mock_init_chat_model: M
     assert "no checkpoint found for thread_id" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_with_checkpointer_prints_thread_id(
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_with_checkpointer_prints_thread_id(
     mock_init_chat_model: MagicMock,
 ) -> None:
     mock_llm = MagicMock()
@@ -156,8 +156,8 @@ def test_agentdraft_run_with_checkpointer_prints_thread_id(
     assert re.search(r"thread_id: \S+", result.output)
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_resume_continues_from_last_checkpoint_after_a_crash(
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_resume_continues_from_last_checkpoint_after_a_crash(
     mock_init_chat_model: MagicMock,
 ) -> None:
     """FR-5.3/NFR-7.1: a run that dies mid-execution can be resumed and continues
@@ -190,8 +190,8 @@ def test_agentdraft_run_resume_continues_from_last_checkpoint_after_a_crash(
     assert "[closer] goodbye from closer" in second.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_resume_exits_1_if_schema_changed_since_last_run(
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_resume_exits_1_if_schema_changed_since_last_run(
     mock_init_chat_model: MagicMock,
 ) -> None:
     """FR-5.6: resuming against a schema that changed since the thread's last
@@ -231,8 +231,8 @@ def test_agentdraft_run_resume_exits_1_if_schema_changed_since_last_run(
     assert "[closer] goodbye from closer" in forced.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
-def test_agentdraft_run_resume_succeeds_with_no_prior_run_to_compare_against(
+@patch("agc.compiler.init_chat_model")
+def test_agc_run_resume_succeeds_with_no_prior_run_to_compare_against(
     mock_init_chat_model: MagicMock,
 ) -> None:
     """FR-5.6: the schema-consistency guard is best-effort - if the run ledger has no

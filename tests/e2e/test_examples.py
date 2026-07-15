@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 from langchain_core.messages import AIMessage
 
-from agentdraft.cli import main
+from agc.cli import main
 
 EXAMPLE = Path(__file__).parent.parent.parent / "examples" / "docs_qa.yaml"
 
@@ -21,7 +21,7 @@ def test_docs_qa_example_validates() -> None:
     assert result.exit_code == 0
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_docs_qa_example_explains_without_executing(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.return_value = MagicMock()
 
@@ -33,7 +33,7 @@ def test_docs_qa_example_explains_without_executing(mock_init_chat_model: MagicM
     mock_init_chat_model.return_value.invoke.assert_not_called()
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_docs_qa_example_answers_using_the_real_search_docs_tool(
     mock_init_chat_model: MagicMock,
 ) -> None:

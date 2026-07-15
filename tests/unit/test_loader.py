@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agentdraft.loader import HandlerResolutionError, resolve_reference
+from agc.loader import HandlerResolutionError, resolve_reference
 
 
 def test_resolve_reference_returns_the_target_object() -> None:

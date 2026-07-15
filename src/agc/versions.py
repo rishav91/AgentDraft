@@ -1,5 +1,5 @@
 """Local schema version history (`FR-9`, `ADR-010`): one revision row per distinct
-`save_schema` content change, in the shared `.agentdraft/state.db` file also used by
+`save_schema` content change, in the shared `.agc/state.db` file also used by
 checkpointing (`ADR-009`). Distinct from `schema_version` (`ADR-006`), which is the
 schema *format* version a file targets, not an edit-history revision number
 (`FR-9.4`).
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from agentdraft.store import ensure_local_store_dir
+from agc.store import ensure_local_store_dir
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS schema_versions (

@@ -7,10 +7,10 @@ __pycache__/
 *.egg-info/
 .lavish/
 .coverage
-.agentdraft/
+.agc/
 canvas/node_modules/
 canvas/dist/
-src/agentdraft/canvas_static/
+src/agc/canvas_static/
 canvas/*.tsbuildinfo
 canvas/test-results/
 canvas/playwright-report/

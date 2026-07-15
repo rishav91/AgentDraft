@@ -13,7 +13,7 @@ class HandlerResolutionError(Exception):
 
 
 def _ensure_cwd_importable() -> None:
-    # The installed `agentdraft` console script sets sys.path[0] to its own
+    # The installed `agc` console script sets sys.path[0] to its own
     # install directory, not the caller's cwd (unlike `python -c`/`python -m`),
     # so a user's own tool/handler modules next to their schema file would
     # otherwise never resolve.

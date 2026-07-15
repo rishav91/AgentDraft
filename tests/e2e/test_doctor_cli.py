@@ -2,12 +2,12 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agentdraft.cli import main
+from agc.cli import main
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 
-def test_agentdraft_doctor_with_no_schema_checks_general_only() -> None:
+def test_agc_doctor_with_no_schema_checks_general_only() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["doctor"])
 
@@ -15,7 +15,7 @@ def test_agentdraft_doctor_with_no_schema_checks_general_only() -> None:
     assert "Python" in result.output
 
 
-def test_agentdraft_doctor_reports_missing_provider_key(monkeypatch) -> None:
+def test_agc_doctor_reports_missing_provider_key(monkeypatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     runner = CliRunner()
     result = runner.invoke(main, ["doctor", str(FIXTURES / "tool_calling.yaml")])
@@ -25,7 +25,7 @@ def test_agentdraft_doctor_reports_missing_provider_key(monkeypatch) -> None:
     assert "ANTHROPIC_API_KEY" in result.output
 
 
-def test_agentdraft_doctor_passes_when_key_present(monkeypatch) -> None:
+def test_agc_doctor_passes_when_key_present(monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     runner = CliRunner()
     result = runner.invoke(main, ["doctor", str(FIXTURES / "tool_calling.yaml")])
@@ -34,7 +34,7 @@ def test_agentdraft_doctor_passes_when_key_present(monkeypatch) -> None:
     assert "MISSING" not in result.output
 
 
-def test_agentdraft_doctor_rejects_invalid_schema() -> None:
+def test_agc_doctor_rejects_invalid_schema() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["doctor", str(FIXTURES / "invalid_provider.yaml")])
 

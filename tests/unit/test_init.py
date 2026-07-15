@@ -2,7 +2,7 @@ import importlib.metadata
 
 import pytest
 
-from agentdraft.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
+from agc.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
 
 
 @pytest.mark.parametrize("provider", ["anthropic", "openai"])
@@ -81,10 +81,10 @@ def test_provider_api_key_env_covers_both_providers() -> None:
 
 
 def _fake_version(name: str) -> str:
-    return {"agent-draft": "9.9.9", "langchain-core": "1.2.3"}[name]
+    return {"agentic-graph-composer": "9.9.9", "langchain-core": "1.2.3"}[name]
 
 
-def test_requirements_txt_pins_installed_agent_draft_and_langchain_core_versions(
+def test_requirements_txt_pins_installed_agentic_graph_composer_and_langchain_core_versions(
     tmp_path, monkeypatch
 ) -> None:
     monkeypatch.setattr(importlib.metadata, "version", _fake_version)
@@ -92,9 +92,9 @@ def test_requirements_txt_pins_installed_agent_draft_and_langchain_core_versions
     scaffold(tmp_path, "anthropic", force=False)
 
     content = (tmp_path / "requirements.txt").read_text()
-    assert "agent-draft==9.9.9[examples]" in content
+    assert "agentic-graph-composer==9.9.9[examples]" in content
     assert "langchain-core==1.2.3" in content
-    assert "vendor/agent_draft-9.9.9-py3-none-any.whl[examples]" in content
+    assert "vendor/agentic_graph_composer-9.9.9-py3-none-any.whl[examples]" in content
 
 
 def test_requirements_txt_is_identical_across_providers(tmp_path, monkeypatch) -> None:

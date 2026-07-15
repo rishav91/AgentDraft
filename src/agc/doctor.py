@@ -1,7 +1,7 @@
 """Environment/readiness checks (3.5.3): presence-only checks (never values,
 per this repo's secrets convention) against the env vars and optional extras
 a schema would actually need at run time - surfaced proactively here instead
-of failing mid-`agentdraft run`.
+of failing mid-`agc run`.
 """
 
 import importlib.util
@@ -9,11 +9,11 @@ import os
 import sys
 from dataclasses import dataclass
 
-from agentdraft.init import PROVIDER_API_KEY_ENV
-from agentdraft.schema import Schema
+from agc.init import PROVIDER_API_KEY_ENV
+from agc.schema import Schema
 
 #: provider -> (extra name, the module its client library installs as).
-#: Only covers providers `agentdraft init` ships templates for - not
+#: Only covers providers `agc init` ships templates for - not
 #: exhaustive against every provider `schema.py`'s SUPPORTED_PROVIDERS
 #: accepts. Providers outside PROVIDER_API_KEY_ENV are reported as unknown,
 #: not silently skipped.
@@ -72,7 +72,9 @@ def check_extra_installed(module_name: str, extra_name: str) -> Check:
     found = importlib.util.find_spec(module_name) is not None
     if found:
         return Check(True, f"{module_name}: installed")
-    return Check(False, f'{module_name}: missing - pip install "agent-draft[{extra_name}]"')
+    return Check(
+        False, f'{module_name}: missing - pip install "agentic-graph-composer[{extra_name}]"'
+    )
 
 
 def run_checks(schema: Schema | None) -> list[Check]:
