@@ -1,3 +1,5 @@
+import importlib.metadata
+
 import pytest
 
 from agentdraft.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
@@ -12,6 +14,7 @@ def test_scaffold_writes_expected_files(tmp_path, provider) -> None:
     assert "tools.py" in names
     assert "NOTES.md" in names
     assert ".env.example" in names
+    assert "requirements.txt" in names
     if provider == "openai":
         assert "handlers.py" in names
         assert "routing.py" in names
@@ -75,3 +78,31 @@ def test_scaffold_writes_nothing_on_conflict(tmp_path) -> None:
 def test_provider_api_key_env_covers_both_providers() -> None:
     assert PROVIDER_API_KEY_ENV["anthropic"] == "ANTHROPIC_API_KEY"
     assert PROVIDER_API_KEY_ENV["openai"] == "OPENAI_API_KEY"
+
+
+def _fake_version(name: str) -> str:
+    return {"agent-draft": "9.9.9", "langchain-core": "1.2.3"}[name]
+
+
+def test_requirements_txt_pins_installed_agent_draft_and_langchain_core_versions(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(importlib.metadata, "version", _fake_version)
+
+    scaffold(tmp_path, "anthropic", force=False)
+
+    content = (tmp_path / "requirements.txt").read_text()
+    assert "agent-draft==9.9.9[examples]" in content
+    assert "langchain-core==1.2.3" in content
+    assert "vendor/agent_draft-9.9.9-py3-none-any.whl[examples]" in content
+
+
+def test_requirements_txt_is_identical_across_providers(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(importlib.metadata, "version", _fake_version)
+
+    scaffold(tmp_path / "a", "anthropic", force=False)
+    scaffold(tmp_path / "o", "openai", force=False)
+
+    assert (tmp_path / "a" / "requirements.txt").read_text() == (
+        tmp_path / "o" / "requirements.txt"
+    ).read_text()
