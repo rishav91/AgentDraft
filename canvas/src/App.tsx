@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { fetchGraph } from "./api";
-import { resolveApiBase } from "./apiBase";
 import { Editor } from "./Editor";
 import { FileLoader } from "./FileLoader";
 import { GraphCanvas } from "./GraphCanvas";
 import type { GraphStructure } from "./types";
 
-const API_BASE = resolveApiBase();
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 export function App() {
   return API_BASE ? <ApiApp apiBase={API_BASE} /> : <ViewOnlyApp />;

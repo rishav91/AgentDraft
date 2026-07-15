@@ -1,30 +1,12 @@
 {
   "name": "agentdraft-canvas",
+  "private": true,
   "version": "0.1.0",
-  "description": "Visual editor for AgentDraft agent graphs - view-only or live-editing against a local agentdraft canvas API server.",
   "type": "module",
-  "bin": {
-    "agentdraft-canvas": "./bin/agentdraft-canvas.js"
-  },
-  "files": [
-    "dist",
-    "bin",
-    "README.md"
-  ],
-  "license": "MIT",
-  "author": "Rishav Raushan",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/rishav91/AgentDraft.git",
-    "directory": "canvas"
-  },
-  "homepage": "https://github.com/rishav91/AgentDraft/tree/main/canvas",
-  "bugs": "https://github.com/rishav91/AgentDraft/issues",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
