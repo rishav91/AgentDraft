@@ -52,7 +52,7 @@ function ApiApp({ apiBase }: { apiBase: string }) {
   if (error) {
     return (
       <div className="file-loader">
-        <h1>AgentDraft Canvas</h1>
+        <h1>Agentic Graph Composer Canvas</h1>
         <p className="file-loader__error">
           Couldn't load from {apiBase}: {error}
         </p>
@@ -63,7 +63,7 @@ function ApiApp({ apiBase }: { apiBase: string }) {
   if (!structure) {
     return (
       <div className="file-loader">
-        <h1>AgentDraft Canvas</h1>
+        <h1>Agentic Graph Composer Canvas</h1>
         <p>Loading from {apiBase}...</p>
       </div>
     );

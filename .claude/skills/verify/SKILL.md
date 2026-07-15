@@ -1,12 +1,12 @@
 ---
 name: verify
-description: Run this repo's full verification suite (lint, typecheck, tests, coverage gate) for whichever of Python and canvas were touched. Use before considering a change to src/agentdraft or canvas/src complete, or when the user asks to verify/check the build.
+description: Run this repo's full verification suite (lint, typecheck, tests, coverage gate) for whichever of Python and canvas were touched. Use before considering a change to src/agc or canvas/src complete, or when the user asks to verify/check the build.
 ---
 
 Run the checks below for whichever stack(s) changed. If both changed, run both. These mirror
 `.github/workflows/ci.yml` exactly - if these pass locally, CI should pass.
 
-## Python (`src/agentdraft`, `tests/`)
+## Python (`src/agc`, `tests/`)
 
 Run from the repo root:
 
@@ -14,7 +14,7 @@ Run from the repo root:
 ruff check .
 ruff format .
 mypy src
-pytest tests/unit tests/e2e --cov=agentdraft --cov-report=term-missing
+pytest tests/unit tests/e2e --cov=agc --cov-report=term-missing
 ```
 
 - `ruff check .` and `mypy src` (strict mode) must be clean.
@@ -35,7 +35,7 @@ npm run test
 - `npm run lint` runs ESLint (`eslint.config.js`).
 - `npm run build` is `tsc -b && vite build` - the typecheck step.
 - `npm run test:e2e` (Playwright) requires the Python package to be pip-installed (`pip install
-  -e ".[dev]"` from repo root) since the e2e spec spawns a real `agentdraft canvas` process. Only run
+  -e ".[dev]"` from repo root) since the e2e spec spawns a real `agc canvas` process. Only run
   it if asked explicitly or if the change touches the canvas <-> API server contract - it's slower and
   needs `npx playwright install --with-deps chromium` on a fresh machine.
 

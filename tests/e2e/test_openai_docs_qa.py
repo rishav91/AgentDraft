@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 from langchain_core.messages import AIMessage
 
-from agentdraft.cli import main
+from agc.cli import main
 
 EXAMPLE = Path(__file__).parent.parent.parent / "examples" / "openai_docs_qa.yaml"
 
@@ -21,7 +21,7 @@ def test_openai_docs_qa_example_validates() -> None:
     assert result.exit_code == 0
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_openai_docs_qa_example_explains_without_executing(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -37,7 +37,7 @@ def test_openai_docs_qa_example_explains_without_executing(
     mock_init_chat_model.return_value.invoke.assert_not_called()
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_openai_docs_qa_example_routes_docs_question_through_search_tool(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -64,7 +64,7 @@ def test_openai_docs_qa_example_routes_docs_question_through_search_tool(
     assert "docs/" in result.output
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_openai_docs_qa_example_routes_small_talk_through_greeting_handler(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -79,4 +79,4 @@ def test_openai_docs_qa_example_routes_small_talk_through_greeting_handler(
     result = runner.invoke(main, ["run", str(EXAMPLE), "hello!"])
 
     assert result.exit_code == 0
-    assert "[greet] Hey! Ask me anything about AgentDraft's docs." in result.output
+    assert "[greet] Hey! Ask me anything about Agentic Graph Composer's docs." in result.output

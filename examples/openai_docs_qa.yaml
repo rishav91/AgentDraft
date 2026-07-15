@@ -7,10 +7,10 @@
 # Needs a real OPENAI_API_KEY and `pip install -U langchain-openai`.
 #
 # Run it:
-#   agentdraft validate examples/openai_docs_qa.yaml
-#   agentdraft explain examples/openai_docs_qa.yaml
-#   agentdraft run examples/openai_docs_qa.yaml "What does the roadmap say about Phase 2?"
-#   agentdraft run examples/openai_docs_qa.yaml "hello!"
+#   agc validate examples/openai_docs_qa.yaml
+#   agc explain examples/openai_docs_qa.yaml
+#   agc run examples/openai_docs_qa.yaml "What does the roadmap say about Phase 2?"
+#   agc run examples/openai_docs_qa.yaml "hello!"
 schema_version: 1
 nodes:
   - id: router
@@ -19,14 +19,14 @@ nodes:
       model: gpt-4o-mini
       system: >
         Classify the user's message. Reply with exactly one word: "docs" if
-        they're asking a question about the AgentDraft project or its docs,
+        they're asking a question about the Agentic Graph Composer project or its docs,
         or "chat" if it's just a greeting or small talk. No other text.
   - id: search
     llm:
       provider: openai
       model: gpt-4o-mini
       system: >
-        You answer questions about the AgentDraft project using its own design
+        You answer questions about the Agentic Graph Composer project using its own design
         docs. Call search_docs to find relevant lines before answering, and
         say you don't know if nothing relevant turns up rather than guessing.
     tools:

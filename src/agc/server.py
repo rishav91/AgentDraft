@@ -2,7 +2,7 @@
 
 Single-user, localhost-only, no auth - the same trust boundary the custom-code
 escape hatch already accepts (NFR-4.1, NFR-4.2): the schema author has full local
-code execution regardless. Started by `agentdraft canvas <schema>`; stopped with
+code execution regardless. Started by `agc canvas <schema>`; stopped with
 Ctrl+C.
 """
 
@@ -16,9 +16,9 @@ from urllib.parse import parse_qs, urlsplit
 import yaml
 from pydantic import ValidationError
 
-from agentdraft.compiler import schema_from_structure, schema_structure
-from agentdraft.discovery import discover_callables, discover_schema_files, get_callable_source
-from agentdraft.schema import (
+from agc.compiler import schema_from_structure, schema_structure
+from agc.discovery import discover_callables, discover_schema_files, get_callable_source
+from agc.schema import (
     SUPPORTED_PROVIDERS,
     format_validation_errors,
     load_schema,
@@ -27,7 +27,7 @@ from agentdraft.schema import (
 
 # Bundled canvas UI (ADR-015), populated by hatch_build.py at wheel-build
 # time - absent in a source checkout that never ran `npm run build`, or a
-# dev install with AGENTDRAFT_SKIP_CANVAS_BUILD set; _resolve_static_file
+# dev install with AGC_SKIP_CANVAS_BUILD set; _resolve_static_file
 # degrades to None in that case rather than raising.
 _STATIC_DIR = Path(__file__).resolve().parent / "canvas_static"
 
@@ -83,11 +83,11 @@ def _handler_for(
             self.end_headers()
 
         def _serve_static_or_config(self, url_path: str) -> None:
-            if url_path == "/agentdraft-config.js":
+            if url_path == "/agc-config.js":
                 # Empty string = "same origin" (this server, ADR-015) - the
                 # canvas app treats a *configured but empty* value differently
                 # from an unset one, so this must never be omitted/undefined.
-                body = b'window.__AGENTDRAFT_API_BASE__ = "";\n'
+                body = b'window.__AGC_API_BASE__ = "";\n'
                 self.send_response(200)
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Content-Type", "text/javascript; charset=utf-8")
@@ -242,8 +242,8 @@ def run_canvas_server(
     """
     server = create_server(schema_path, host=host, port=port, scan_dirs=scan_dirs)
     url = f"http://{host}:{server.server_address[1]}"
-    print(f"AGENTDRAFT_CANVAS_URL={url}")
-    print(f"agentdraft canvas running at {url} - open it in a browser")
+    print(f"AGC_CANVAS_URL={url}")
+    print(f"agc canvas running at {url} - open it in a browser")
     print(f"(developing the canvas itself? cd canvas && VITE_API_BASE={url} npm run dev)")
     try:
         server.serve_forever()

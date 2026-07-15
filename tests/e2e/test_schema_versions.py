@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agentdraft.cli import main
+from agc.cli import main
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "skeleton.yaml"
 
@@ -25,7 +25,7 @@ def test_schema_log_lists_revisions_after_a_save() -> None:
 
         # Drive save_schema directly through the library - the same function the
         # canvas API server's POST /api/save funnels through (FR-9.1, ADR-008).
-        from agentdraft.schema import load_schema, save_schema
+        from agc.schema import load_schema, save_schema
 
         schema = load_schema(schema_path)
         schema.nodes[0].llm.system = "changed"  # type: ignore[union-attr]
@@ -43,7 +43,7 @@ def test_schema_diff_shows_unified_diff_between_revisions() -> None:
         schema_path = Path("schema.yaml")
         schema_path.write_text(FIXTURE.read_text())
 
-        from agentdraft.schema import load_schema, save_schema
+        from agc.schema import load_schema, save_schema
 
         schema = load_schema(schema_path)
         save_schema(schema, schema_path)  # revision 1
@@ -66,7 +66,7 @@ def test_schema_diff_exits_1_on_unknown_revision() -> None:
         schema_path = Path("schema.yaml")
         schema_path.write_text(FIXTURE.read_text())
 
-        from agentdraft.schema import load_schema, save_schema
+        from agc.schema import load_schema, save_schema
 
         save_schema(load_schema(schema_path), schema_path)
 
@@ -82,7 +82,7 @@ def test_schema_revert_restores_an_older_revision_as_a_new_one() -> None:
         schema_path = Path("schema.yaml")
         schema_path.write_text(FIXTURE.read_text())
 
-        from agentdraft.schema import load_schema, save_schema
+        from agc.schema import load_schema, save_schema
 
         schema = load_schema(schema_path)
         save_schema(schema, schema_path)  # revision 1
@@ -105,7 +105,7 @@ def test_schema_revert_is_a_no_op_when_already_at_that_content() -> None:
         schema_path = Path("schema.yaml")
         schema_path.write_text(FIXTURE.read_text())
 
-        from agentdraft.schema import load_schema, save_schema
+        from agc.schema import load_schema, save_schema
 
         save_schema(load_schema(schema_path), schema_path)  # revision 1
 
@@ -121,7 +121,7 @@ def test_schema_revert_exits_1_on_unknown_revision() -> None:
         schema_path = Path("schema.yaml")
         schema_path.write_text(FIXTURE.read_text())
 
-        from agentdraft.schema import load_schema, save_schema
+        from agc.schema import load_schema, save_schema
 
         save_schema(load_schema(schema_path), schema_path)
 

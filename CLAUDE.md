@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-AgentDraft is a CLI- and canvas-first builder for AI agents on LangGraph. Agents are defined as
+Agentic Graph Composer is a CLI- and canvas-first builder for AI agents on LangGraph. Agents are defined as
 declarative YAML and compiled into a real LangGraph `StateGraph` (not a reimplementation of LangGraph).
 
 The repo has two parts:
-- `src/agentdraft/` - the Python package (CLI, schema, compiler, discovery, local API server for canvas
+- `src/agc/` - the Python package (CLI, schema, compiler, discovery, local API server for canvas
   editing mode).
 - `canvas/` - a standalone React + TypeScript + Vite app (React Flow-based visual editor).
 
@@ -34,7 +34,7 @@ back on feature requests that would add this kind of abstraction prematurely (se
 - Type-check (strict, `src` only): `mypy src`
 - Unit tests: `pytest tests/unit`
 - E2E tests: `pytest tests/e2e`
-- Full suite with coverage gate: `pytest tests/unit tests/e2e --cov=agentdraft --cov-report=term-missing`
+- Full suite with coverage gate: `pytest tests/unit tests/e2e --cov=agc --cov-report=term-missing`
 
 Coverage must stay >= 99% (`fail_under = 99` in `pyproject.toml`). New Python code needs
 near-complete test coverage or CI fails.
@@ -45,7 +45,7 @@ near-complete test coverage or CI fails.
 - Lint: `npm run lint` (ESLint, `eslint.config.js`)
 - Build + typecheck: `npm run build` (`tsc -b && vite build`)
 - Unit/component tests: `npm run test` (Vitest)
-- E2E tests: `npm run test:e2e` (Playwright; spawns a real `agentdraft canvas` process itself, so the
+- E2E tests: `npm run test:e2e` (Playwright; spawns a real `agc canvas` process itself, so the
   Python package must be pip-installed first)
 
 ## Conventions
@@ -57,9 +57,9 @@ near-complete test coverage or CI fails.
   a phase is trivially small.
 - LLM API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) come from environment variables only -
   never stored in or read from the schema YAML file itself.
-- CLI exit codes are a stable contract (see `src/agentdraft/cli.py`): `0` success, `1` validation
+- CLI exit codes are a stable contract (see `src/agc/cli.py`): `0` success, `1` validation
   error, `2` compile error, `3` runtime/execution error. Don't change these casually.
-- The canvas API server (`agentdraft canvas`) binds to `127.0.0.1` only and has no authentication by
+- The canvas API server (`agc canvas`) binds to `127.0.0.1` only and has no authentication by
   design (local-first, single-user tool) - this is an accepted trust boundary, not a bug to fix.
 - A schema with exactly one node and no `edges` section is valid and implicitly wired
-  `START -> node -> END` (see `src/agentdraft/schema.py` module docstring).
+  `START -> node -> END` (see `src/agc/schema.py` module docstring).

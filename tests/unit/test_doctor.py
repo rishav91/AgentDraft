@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agentdraft.doctor import (
+from agc.doctor import (
     check_checkpointer_dsn,
     check_extra_installed,
     check_otel_endpoint,
@@ -8,7 +8,7 @@ from agentdraft.doctor import (
     check_python_version,
     run_checks,
 )
-from agentdraft.schema import load_schema
+from agc.schema import load_schema
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -72,7 +72,7 @@ def test_check_extra_installed_found() -> None:
 def test_check_extra_installed_missing() -> None:
     check = check_extra_installed("no_such_module_xyz", "examples")
     assert not check.ok
-    assert 'pip install "agent-draft[examples]"' in check.message
+    assert 'pip install "agentic-graph-composer[examples]"' in check.message
 
 
 def test_run_checks_with_no_schema_is_general_only() -> None:

@@ -1,9 +1,9 @@
 from click.testing import CliRunner
 
-from agentdraft.cli import main
+from agc.cli import main
 
 
-def test_agentdraft_init_defaults_to_cwd_and_anthropic() -> None:
+def test_agc_init_defaults_to_cwd_and_anthropic() -> None:
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(main, ["init"])
@@ -11,10 +11,10 @@ def test_agentdraft_init_defaults_to_cwd_and_anthropic() -> None:
         assert result.exit_code == 0
         assert "created" in result.output
         assert "ANTHROPIC_API_KEY" in result.output
-        assert "agentdraft validate" in result.output
+        assert "agc validate" in result.output
 
 
-def test_agentdraft_init_explicit_dest_and_openai_provider() -> None:
+def test_agc_init_explicit_dest_and_openai_provider() -> None:
     runner = CliRunner()
     with runner.isolated_filesystem():
         result = runner.invoke(main, ["init", "my-agent", "--provider", "openai"])
@@ -27,7 +27,7 @@ def test_agentdraft_init_explicit_dest_and_openai_provider() -> None:
         assert "valid" in result.output
 
 
-def test_agentdraft_init_refuses_to_overwrite_without_force() -> None:
+def test_agc_init_refuses_to_overwrite_without_force() -> None:
     runner = CliRunner()
     with runner.isolated_filesystem():
         runner.invoke(main, ["init"])
@@ -38,7 +38,7 @@ def test_agentdraft_init_refuses_to_overwrite_without_force() -> None:
         assert "--force" in result.output
 
 
-def test_agentdraft_init_force_overwrites() -> None:
+def test_agc_init_force_overwrites() -> None:
     runner = CliRunner()
     with runner.isolated_filesystem():
         runner.invoke(main, ["init"])

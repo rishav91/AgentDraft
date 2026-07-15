@@ -4,7 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from agentdraft.runs import (
+from agc.runs import (
     COMPLETED,
     FAILED,
     NodeTiming,
@@ -15,7 +15,7 @@ from agentdraft.runs import (
     prune_runs,
     start_run,
 )
-from agentdraft.store import ensure_local_store_dir
+from agc.store import ensure_local_store_dir
 
 
 def _set_pid(run_id: str, pid: int) -> None:
@@ -177,7 +177,7 @@ def test_running_row_treated_as_alive_on_ambiguous_os_error() -> None:
     """
     run_id = start_run("schema.yaml", "abc123", None)
 
-    with patch("agentdraft.runs.os.kill", side_effect=PermissionError):
+    with patch("agc.runs.os.kill", side_effect=PermissionError):
         run = get_run(run_id)
 
     assert run is not None

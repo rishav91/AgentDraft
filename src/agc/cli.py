@@ -20,12 +20,12 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import ValidationError
 
-from agentdraft.compiler import CompileError, compile_schema, explain_schema, schema_structure
-from agentdraft.doctor import run_checks
-from agentdraft.evals import EvalsFileError, load_evals_file, run_case
-from agentdraft.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
-from agentdraft.observability import run_span, shutdown_tracing
-from agentdraft.runs import (
+from agc.compiler import CompileError, compile_schema, explain_schema, schema_structure
+from agc.doctor import run_checks
+from agc.evals import EvalsFileError, load_evals_file, run_case
+from agc.init import PROVIDER_API_KEY_ENV, ScaffoldExistsError, scaffold
+from agc.observability import run_span, shutdown_tracing
+from agc.runs import (
     COMPLETED,
     FAILED,
     NodeTiming,
@@ -37,9 +37,9 @@ from agentdraft.runs import (
     prune_runs,
     start_run,
 )
-from agentdraft.schema import Schema, format_validation_errors, load_schema
-from agentdraft.server import run_canvas_server
-from agentdraft.versions import (
+from agc.schema import Schema, format_validation_errors, load_schema
+from agc.server import run_canvas_server
+from agc.versions import (
     RevisionNotFoundError,
     diff_revisions,
     list_revisions,
@@ -68,7 +68,7 @@ def _compile_or_exit(schema: Schema) -> CompiledStateGraph:
 
 @click.group()
 def main() -> None:
-    """AgentDraft: define agents as YAML, compile them to LangGraph."""
+    """Agentic Graph Composer: define agents as YAML, compile them to LangGraph."""
     # Load a `.env` file from cwd if present (e.g. ANTHROPIC_API_KEY/OPENAI_API_KEY) -
     # a real, already-exported env var always wins (override=False), .env is only a
     # fallback. Keys still come from the environment either way (ARCHITECTURE §8);
@@ -108,8 +108,8 @@ def init_cmd(dest: str | None, provider: str, force: bool) -> None:
         f"  1. cp {target / '.env.example'} {target / '.env'}   "
         f"# then fill in {PROVIDER_API_KEY_ENV[provider]}"
     )
-    click.echo(f"  2. agentdraft validate {schema_path}")
-    click.echo(f'  3. agentdraft run {schema_path} "<your message>"')
+    click.echo(f"  2. agc validate {schema_path}")
+    click.echo(f'  3. agc run {schema_path} "<your message>"')
 
 
 @main.command()
@@ -208,7 +208,7 @@ def run(schema_path: str, message: str | None, thread_id: str | None, force: boo
                         click.echo(f"[{node_name}] {msg.content}")
     except Exception as exc:
         # LangGraph's own runtime error surfaces as-is (ARCHITECTURE §7) - only the
-        # exit code is AgentDraft's to control.
+        # exit code is Agentic Graph Composer's to control.
         finish_run(run_id, status=FAILED, node_timings=node_timings, error=str(exc), exit_code=3)
         shutdown_tracing()
         traceback.print_exc()

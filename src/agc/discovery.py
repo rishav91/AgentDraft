@@ -16,7 +16,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from agentdraft.schema import load_schema
+from agc.schema import load_schema
 
 _EXCLUDED_DIR_NAMES = {
     "__pycache__",
@@ -32,11 +32,11 @@ _EXCLUDED_DIR_NAMES = {
 }
 
 # Resolved via this module's own __file__ - the actual installed location,
-# whether an editable dev install (this repo's src/agentdraft) or a normal
-# site-packages one - not a hardcoded path string. AgentDraft's own source
+# whether an editable dev install (this repo's src/agc) or a normal
+# site-packages one - not a hardcoded path string. Agentic Graph Composer's own source
 # should never show up as a suggested handler/condition/tool reference just
-# because `agentdraft canvas` happens to be run from inside this repo.
-_AGENTDRAFT_PACKAGE_DIR = Path(__file__).resolve().parent
+# because `agc canvas` happens to be run from inside this repo.
+_AGC_PACKAGE_DIR = Path(__file__).resolve().parent
 
 
 def _module_path(py_file: Path, root: Path) -> str | None:
@@ -92,7 +92,7 @@ def discover_callables(import_root: Path, scan_dirs: Sequence[Path] = ()) -> lis
     `tests/` directory from candidates without excluding it from real imports
     (`FR-4.5`). Empty/omitted (the default) walks the entire IMPORT_ROOT.
 
-    Skips excluded/hidden directories, AgentDraft's own package, and any file
+    Skips excluded/hidden directories, Agentic Graph Composer's own package, and any file
     that fails to parse - a syntax error elsewhere in the project shouldn't
     break the canvas's suggestion list.
     """
@@ -120,7 +120,7 @@ def discover_callables(import_root: Path, scan_dirs: Sequence[Path] = ()) -> lis
                 continue  # outside import_root - can't compute a valid module path
             if any(part in _EXCLUDED_DIR_NAMES or part.startswith(".") for part in rel_parts[:-1]):
                 continue
-            if resolved.is_relative_to(_AGENTDRAFT_PACKAGE_DIR):
+            if resolved.is_relative_to(_AGC_PACKAGE_DIR):
                 continue
 
             module_path = _module_path(resolved, resolved_import_root)
@@ -149,7 +149,7 @@ def discover_schema_files(
 ) -> list[dict[str, Any]]:
     """Scan for `.yaml`/`.yml` files under IMPORT_ROOT (or SCAN_DIRS), for the
     canvas's schema switcher (FR-4.7). Each entry reports whether the file is
-    currently a loadable AgentDraft schema and, if so, its node count - a
+    currently a loadable Agentic Graph Composer schema and, if so, its node count - a
     broken/in-progress file elsewhere in the project surfaces as
     `valid: false` rather than breaking the whole list, same principle as
     `discover_callables`.

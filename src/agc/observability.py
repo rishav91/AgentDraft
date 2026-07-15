@@ -1,7 +1,7 @@
 """OpenTelemetry instrumentation for a run's execution (`FR-7`, `ADR-011`).
-Vendor-neutral: AgentDraft emits standard OTel spans and bundles no backend of
+Vendor-neutral: Agentic Graph Composer emits standard OTel spans and bundles no backend of
 its own (`FR-7.4`) - export is driven entirely by the standard
-`OTEL_EXPORTER_OTLP_ENDPOINT` env var (`FR-7.3`), with zero AgentDraft-specific
+`OTEL_EXPORTER_OTLP_ENDPOINT` env var (`FR-7.3`), with zero Agentic Graph Composer-specific
 config surface. With no endpoint configured, `opentelemetry-api`'s own default
 tracer provider creates spans that are never recorded or exported (`NFR-8.1`):
 zero network I/O, near-zero overhead.
@@ -28,7 +28,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
 
-_TRACER_NAME = "agentdraft"
+_TRACER_NAME = "agc"
 _EXPORT_TIMEOUT_SECONDS = 5
 
 _provider_configured = False
@@ -47,7 +47,7 @@ def _build_provider() -> TracerProvider | None:
 
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
-    service_name = os.environ.get("OTEL_SERVICE_NAME", "agentdraft")
+    service_name = os.environ.get("OTEL_SERVICE_NAME", "agc")
     provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
     provider.add_span_processor(
         BatchSpanProcessor(OTLPSpanExporter(timeout=_EXPORT_TIMEOUT_SECONDS))
@@ -93,10 +93,10 @@ def shutdown_tracing() -> None:
 
 @contextmanager
 def run_span(run_id: str, schema_path: str) -> Iterator[Span]:
-    """Root span for one `agentdraft run` invocation (`FR-7.1`)."""
-    with _tracer().start_as_current_span("agentdraft.run") as span:
-        span.set_attribute("agentdraft.run_id", run_id)
-        span.set_attribute("agentdraft.schema_path", schema_path)
+    """Root span for one `agc run` invocation (`FR-7.1`)."""
+    with _tracer().start_as_current_span("agc.run") as span:
+        span.set_attribute("agc.run_id", run_id)
+        span.set_attribute("agc.schema_path", schema_path)
         yield span
 
 
@@ -105,10 +105,10 @@ def node_span(node_id: str) -> Iterator[Span]:
     """Child span for one executed node (`FR-7.1`). Must be entered while a
     `run_span` is the current span for OTel's own context propagation to nest it
     correctly - `compiler.py` only wraps nodes this way for compiled graphs
-    invoked from `agentdraft run`, which always opens a `run_span` first.
+    invoked from `agc run`, which always opens a `run_span` first.
     """
-    with _tracer().start_as_current_span(f"agentdraft.node.{node_id}") as span:
-        span.set_attribute("agentdraft.node", node_id)
+    with _tracer().start_as_current_span(f"agc.node.{node_id}") as span:
+        span.set_attribute("agc.node", node_id)
         try:
             yield span
         except Exception as exc:
@@ -126,9 +126,9 @@ def record_token_usage(span: Span, usage: Mapping[str, Any] | None) -> None:
     if not usage:
         return
     for key, attr in (
-        ("input_tokens", "agentdraft.tokens.prompt"),
-        ("output_tokens", "agentdraft.tokens.completion"),
-        ("total_tokens", "agentdraft.tokens.total"),
+        ("input_tokens", "agc.tokens.prompt"),
+        ("output_tokens", "agc.tokens.completion"),
+        ("total_tokens", "agc.tokens.total"),
     ):
         value = usage.get(key)
         if value is not None:

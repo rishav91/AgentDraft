@@ -1,5 +1,5 @@
-// Mirrors agentdraft.compiler.schema_structure()'s JSON shape exactly
-// (agentdraft explain <schema> --format json, FR-3.5). Keep in sync by hand -
+// Mirrors agc.compiler.schema_structure()'s JSON shape exactly
+// (agc explain <schema> --format json, FR-3.5). Keep in sync by hand -
 // there is no shared schema generator between the two languages yet.
 
 export type LLMInfo = {

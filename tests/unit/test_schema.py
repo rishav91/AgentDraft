@@ -4,7 +4,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from agentdraft.schema import (
+from agc.schema import (
     SUPPORTED_PROVIDERS,
     Checkpointer,
     Schema,

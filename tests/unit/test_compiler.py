@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from pydantic import ValidationError
 
-from agentdraft.compiler import (
+from agc.compiler import (
     CompileError,
     build_checkpointer,
     compile_schema,
@@ -16,7 +16,7 @@ from agentdraft.compiler import (
     schema_from_structure,
     schema_structure,
 )
-from agentdraft.schema import Checkpointer, Edge, LLMConfig, Node, Schema
+from agc.schema import Checkpointer, Edge, LLMConfig, Node, Schema
 
 
 def _make_schema(system: str | None = "be terse") -> Schema:
@@ -46,7 +46,7 @@ def _make_multi_node_schema() -> Schema:
     )
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_compile_schema_wires_single_node_start_to_end(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.return_value = MagicMock()
     schema = _make_schema()
@@ -58,7 +58,7 @@ def test_compile_schema_wires_single_node_start_to_end(mock_init_chat_model: Mag
     mock_init_chat_model.assert_called_once_with("claude-sonnet-5", model_provider="anthropic")
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_compile_schema_wires_explicit_edges(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.return_value = MagicMock()
     schema = _make_multi_node_schema()
@@ -73,7 +73,7 @@ def test_compile_schema_wires_explicit_edges(mock_init_chat_model: MagicMock) ->
     assert ("b", "__end__") in edges
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_run_node_prepends_system_message(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="hi there")
@@ -89,7 +89,7 @@ def test_run_node_prepends_system_message(mock_init_chat_model: MagicMock) -> No
     assert result["messages"][-1].content == "hi there"
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_run_node_without_system_message(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="ok")
@@ -117,7 +117,7 @@ def _make_tool_schema() -> Schema:
     )
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_compile_schema_wires_tool_node_and_loop_edge(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.bind_tools.return_value = mock_llm
@@ -135,7 +135,7 @@ def test_compile_schema_wires_tool_node_and_loop_edge(mock_init_chat_model: Magi
     assert [t.name for t in bound_tools] == ["echo"]
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_run_loops_through_tool_call_then_answers(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.bind_tools.return_value = mock_llm
@@ -158,7 +158,7 @@ def test_run_loops_through_tool_call_then_answers(mock_init_chat_model: MagicMoc
     assert mock_llm.invoke.call_count == 2
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_unresolvable_tool_reference_raises_compile_error(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.return_value = MagicMock()
     schema = Schema(
@@ -197,7 +197,7 @@ def _make_conditional_schema() -> Schema:
     )
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_compile_schema_wires_conditional_edge(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.return_value = MagicMock()
     schema = _make_conditional_schema()
@@ -208,7 +208,7 @@ def test_compile_schema_wires_conditional_edge(mock_init_chat_model: MagicMock) 
     assert node_names == {"router", "yes_path", "no_path"}
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_conditional_edge_routes_to_the_matching_branch(mock_init_chat_model: MagicMock) -> None:
     responses = {
         "router": AIMessage(content="yes, absolutely"),
@@ -265,7 +265,7 @@ def _make_capped_reflection_schema(max_visits: int) -> Schema:
     )
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_max_visits_forces_fallback_after_the_cap_even_though_condition_keeps_looping(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -297,7 +297,7 @@ def test_max_visits_forces_fallback_after_the_cap_even_though_condition_keeps_lo
     assert result["messages"][-1].content == "not good enough, try again"
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_max_visits_does_not_interfere_before_the_cap_is_reached(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -328,7 +328,7 @@ def test_max_visits_does_not_interfere_before_the_cap_is_reached(
     assert result["messages"][-1].content == "yes, ship it"
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_explain_schema_shows_max_visits_and_fallback(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.return_value = MagicMock()
     schema = _make_capped_reflection_schema(max_visits=2)
@@ -341,7 +341,7 @@ def test_explain_schema_shows_max_visits_and_fallback(mock_init_chat_model: Magi
     ) in text
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_max_visits_wraps_a_handler_node_too(mock_init_chat_model: MagicMock) -> None:
     schema = Schema(
         schema_version=1,
@@ -367,7 +367,7 @@ def test_max_visits_wraps_a_handler_node_too(mock_init_chat_model: MagicMock) ->
     assert sum(1 for m in result["messages"] if m.content == "GO") == 2
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_conditional_edge_with_unresolvable_condition_raises_compile_error(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -411,7 +411,7 @@ def test_handler_node_with_unresolvable_handler_raises_compile_error() -> None:
         compile_schema(schema)
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_handler_node_mixed_with_llm_nodes(mock_init_chat_model: MagicMock) -> None:
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = AIMessage(content="hi")
@@ -435,7 +435,7 @@ def test_handler_node_mixed_with_llm_nodes(mock_init_chat_model: MagicMock) -> N
     assert result["messages"][-1].content == "HI"
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_missing_provider_package_raises_compile_error(mock_init_chat_model: MagicMock) -> None:
     mock_init_chat_model.side_effect = ImportError("Unable to import langchain_anthropic")
     schema = _make_schema()
@@ -444,7 +444,7 @@ def test_missing_provider_package_raises_compile_error(mock_init_chat_model: Mag
         compile_schema(schema)
 
 
-@patch("agentdraft.compiler.init_chat_model")
+@patch("agc.compiler.init_chat_model")
 def test_tool_bound_node_with_conditional_edge_raises_compile_error(
     mock_init_chat_model: MagicMock,
 ) -> None:
@@ -649,7 +649,7 @@ def test_compile_schema_with_sqlite_checkpointer_creates_local_store(
     graph = compile_schema(schema)
 
     assert isinstance(graph.checkpointer, SqliteSaver)
-    db_path = tmp_path / ".agentdraft" / "state.db"
+    db_path = tmp_path / ".agc" / "state.db"
     assert db_path.exists()
     tables = {
         row[0]

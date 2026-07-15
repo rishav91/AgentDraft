@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from agentdraft import discovery
-from agentdraft.discovery import discover_callables, discover_schema_files, get_callable_source
+from agc import discovery
+from agc.discovery import discover_callables, discover_schema_files, get_callable_source
 
 
 def _write(root: Path, rel_path: str, content: str) -> None:
@@ -115,13 +115,13 @@ def test_scan_dirs_skips_a_directory_outside_import_root(tmp_path: Path) -> None
     assert result == []
 
 
-def test_excludes_agentdrafts_own_package_directory(
+def test_excludes_agcs_own_package_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    package_dir = tmp_path / "project" / "vendored" / "agentdraft"
-    _write(tmp_path, "project/vendored/agentdraft/compiler.py", "def schema_structure(): pass\n")
+    package_dir = tmp_path / "project" / "vendored" / "agc"
+    _write(tmp_path, "project/vendored/agc/compiler.py", "def schema_structure(): pass\n")
     _write(tmp_path, "project/handlers.py", "def my_handler(state): return state\n")
-    monkeypatch.setattr(discovery, "_AGENTDRAFT_PACKAGE_DIR", package_dir)
+    monkeypatch.setattr(discovery, "_AGC_PACKAGE_DIR", package_dir)
 
     assert discover_callables(tmp_path / "project") == ["handlers:my_handler"]
 

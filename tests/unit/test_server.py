@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-import agentdraft.server as server_module
-from agentdraft.schema import SUPPORTED_PROVIDERS, load_schema
-from agentdraft.server import create_server, run_canvas_server
+import agc.server as server_module
+from agc.schema import SUPPORTED_PROVIDERS, load_schema
+from agc.server import create_server, run_canvas_server
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "comprehensive.yaml"
 
@@ -437,7 +437,7 @@ def test_run_canvas_server_prints_url_and_stops_on_keyboard_interrupt(
         run_canvas_server(schema_path, port=0)
 
     output = capsys.readouterr().out
-    assert "AGENTDRAFT_CANVAS_URL=http://127.0.0.1:" in output
+    assert "AGC_CANVAS_URL=http://127.0.0.1:" in output
     assert "stopping" in output
 
 
@@ -530,11 +530,11 @@ def test_static_returns_404_json_when_dir_exists_but_has_no_index_html(
     assert "errors" in body
 
 
-def test_agentdraft_config_js_reports_same_origin(running_server: tuple[str, Path]) -> None:
+def test_agc_config_js_reports_same_origin(running_server: tuple[str, Path]) -> None:
     base_url, _ = running_server
 
-    status, body, content_type = _get_raw(f"{base_url}/agentdraft-config.js")
+    status, body, content_type = _get_raw(f"{base_url}/agc-config.js")
 
     assert status == 200
-    assert body == b'window.__AGENTDRAFT_API_BASE__ = "";\n'
+    assert body == b'window.__AGC_API_BASE__ = "";\n'
     assert "javascript" in content_type

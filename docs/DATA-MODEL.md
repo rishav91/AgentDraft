@@ -1,8 +1,8 @@
-# Data model - AgentDraft local store
+# Data model - Agentic Graph Composer local store
 
 See [README](README.md) for the doc map. See [ADR-010](ADRs.md#adr-010---local-persistence-store-single-shared-sqlite-file-no-db-abstraction)
 for why this is one shared SQLite file with no DB abstraction, and [ADR-009](ADRs.md#adr-009---checkpointing-backend-langgraph-native-checkpointers)
-for why checkpoint tables are LangGraph's own schema, not AgentDraft's.
+for why checkpoint tables are LangGraph's own schema, not Agentic Graph Composer's.
 
 ## 1. ER overview
 
@@ -34,7 +34,7 @@ erDiagram
     }
     checkpoints {
         text thread_id PK
-        text checkpoint_data "LangGraph-owned schema, opaque to AgentDraft"
+        text checkpoint_data "LangGraph-owned schema, opaque to Agentic Graph Composer"
     }
 ```
 
@@ -51,7 +51,7 @@ live in the same file without a second connection.
 
 ## 2. Canonical schema
 
-### `schema_versions` (AgentDraft-owned, `FR-9.1`-`FR-9.4`)
+### `schema_versions` (Agentic Graph Composer-owned, `FR-9.1`-`FR-9.4`)
 
 | Field | Type | Notes |
 |---|---|---|
@@ -65,7 +65,7 @@ live in the same file without a second connection.
 Indexed on `(schema_path, revision)`. A save whose content hash matches the current latest revision
 for that path does not insert a new row (`FR-9.1`).
 
-### `runs` (AgentDraft-owned, `FR-6.1`-`FR-6.4`)
+### `runs` (Agentic Graph Composer-owned, `FR-6.1`-`FR-6.4`)
 
 | Field | Type | Notes |
 |---|---|---|
@@ -80,13 +80,13 @@ for that path does not insert a new row (`FR-9.1`).
 | `exit_code` | `INTEGER`, nullable | The CLI exit code the run ended with |
 | `pid` | `INTEGER` | The OS process id that started this run - the liveness check backing the `running` -> `interrupted` reconciliation (§4) |
 
-Indexed on `(schema_path, started_at)` for `agentdraft runs list` (`FR-6.2`).
+Indexed on `(schema_path, started_at)` for `agc runs list` (`FR-6.2`).
 
 ### LangGraph checkpoint tables (LangGraph-owned, `ADR-009`)
 
 When `checkpointer.backend: sqlite`, LangGraph's `SqliteSaver` creates and manages its own tables
 (`checkpoints`, `checkpoint_writes`, etc., per its own internal schema) inside the same
-`.agentdraft/state.db` connection. AgentDraft treats this schema as opaque - it never reads or
+`.agc/state.db` connection. Agentic Graph Composer treats this schema as opaque - it never reads or
 writes these tables directly, only passes the checkpointer instance to `StateGraph.compile()`
 (`ADR-009`) and reads `runs.thread_id` back out to construct a `--resume` command. A `postgres`
 backend keeps these tables in the configured Postgres instance instead; `schema_versions` and
@@ -95,7 +95,7 @@ backend keeps these tables in the configured Postgres instance instead; `schema_
 ## 3. Source → canonical mapping
 
 Not applicable - there is no external data ingestion. Both tables are written exclusively by
-AgentDraft's own CLI/library code (`save_schema` for `schema_versions`; the run executor for
+Agentic Graph Composer's own CLI/library code (`save_schema` for `schema_versions`; the run executor for
 `runs`), never by an external system or a user directly.
 
 ## 4. Consistency & concurrency
@@ -103,7 +103,7 @@ AgentDraft's own CLI/library code (`save_schema` for `schema_versions`; the run 
 - `runs` rows are written incrementally: an insert at run start (`status: running`), an update at
   run end (`status`, `ended_at`, `node_timings`, `error`, `exit_code`). A process killed
   mid-execution (`SIGKILL`, no chance to run cleanup code) leaves a row stuck at `status: running`
-  - `agentdraft runs list`/`show` reconcile this by treating a `running` row whose `pid` is no
+  - `agc runs list`/`show` reconcile this by treating a `running` row whose `pid` is no
   longer alive as `interrupted` at read time (a POSIX `kill(pid, 0)` liveness check; a permission
   error or unsupported-platform ambiguity is conservatively treated as still alive), rather than
   requiring a clean shutdown to record it correctly. `prune` (`FR-6.4`) applies the same check and
@@ -117,7 +117,7 @@ AgentDraft's own CLI/library code (`save_schema` for `schema_versions`; the run 
 - **Full snapshots, not diffs, in `schema_versions.content`.** Schema files are small (single-digit
   KB); storing full text per revision is simpler and more robust than reconstructing a revision
   from a diff chain, at the cost of some redundant storage - an explicit simplicity-over-footprint
-  choice consistent with this project's technical-decision defaults. `agentdraft schema diff`
+  choice consistent with this project's technical-decision defaults. `agc schema diff`
   (`FR-9.3`) computes its diff on read, from two full snapshots.
 - **`node_timings` as a JSON column, not a normalized child table.** A per-node child table would
   be more directly queryable in SQL, but at local/single-user scale ([ARCHITECTURE §6](ARCHITECTURE.md#6-scale--capacity-model))

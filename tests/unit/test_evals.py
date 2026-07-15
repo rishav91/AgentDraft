@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from agentdraft.evals import (
+from agc.evals import (
     Assertion,
     EvalCase,
     EvalsFileError,

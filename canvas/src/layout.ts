@@ -14,7 +14,7 @@ const ENDPOINT_WIDTH = 90;
 const ENDPOINT_HEIGHT = 36;
 
 // Nodes referenced by edges (from/to/routes) that aren't in structure.nodes are the
-// synthetic START/END sentinels - see agentdraft.compiler.schema_structure().
+// synthetic START/END sentinels - see agc.compiler.schema_structure().
 function endpointIds(structure: GraphStructure): Set<string> {
   const known = new Set(structure.nodes.map((node) => node.id));
   const endpoints = new Set<string>();

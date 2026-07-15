@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-// No webServer here: the e2e spec spawns the real `agentdraft canvas` API
+// No webServer here: the e2e spec spawns the real `agc canvas` API
 // process first (to learn its ephemeral port) and only then starts the vite
 // dev server with VITE_API_BASE pointed at it - Playwright's built-in
 // webServer option can't express that ordering, so the spec manages both

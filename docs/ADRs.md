@@ -1,4 +1,4 @@
-# Architecture Decision Records — AgentDraft
+# Architecture Decision Records - Agentic Graph Composer
 
 See [README](README.md) for the doc map. Each ADR: context → decision → alternatives → consequences.
 Referenced by ID (`ADR-00N`) from other docs.
@@ -65,7 +65,7 @@ a JavaScript (`langgraph.js`) implementation.
 
 **Consequences.**
 - `+` Compiles directly against LangGraph's most mature, most feature-complete implementation.
-- `+` No FFI or subprocess boundary between AgentDraft and LangGraph.
+- `+` No FFI or subprocess boundary between Agentic Graph Composer and LangGraph.
 - `−` If the canvas (Phase 2) is a web/Electron frontend, it will need its own language (likely
   TypeScript) and a defined interface to the Python compiler/CLI (e.g. shelling out, or a local
   API) — a boundary this decision defers rather than avoids.
@@ -79,7 +79,7 @@ be swapped for AgentWeave (a planned custom SDK) later. AgentWeave does not exis
 justification is learning/control over agent execution internals rather than a concrete gap in
 LangGraph today (see [PRD](PRD.md)).
 
-**Decision.** AgentDraft's compiler, CLI (Phase 1), and canvas (Phase 2) call LangGraph directly.
+**Decision.** Agentic Graph Composer's compiler, CLI (Phase 1), and canvas (Phase 2) call LangGraph directly.
 No execution-backend interface, no capability-negotiation layer, no backend-neutral skills/MCP
 abstraction is built until AgentWeave exists as a second, real, concrete consumer.
 
@@ -99,7 +99,7 @@ abstraction is built until AgentWeave exists as a second, real, concrete consume
   implementations, not guessed in advance.
 - `−` If/when AgentWeave is built, extracting the interface will require refactoring the compiler
   and CLI's LangGraph-specific call sites — an explicit, accepted future cost.
-- `−` AgentDraft is, for the entire Phase 1-2 horizon, hard-coupled to LangGraph. A LangGraph
+- `−` Agentic Graph Composer is, for the entire Phase 1-2 horizon, hard-coupled to LangGraph. A LangGraph
   breaking change has no abstraction layer to absorb it (see [ARCHITECTURE §7](ARCHITECTURE.md#7-failure-modes--degradation)).
 
 ---
@@ -147,21 +147,21 @@ execution-backend question in `ADR-003` where only one backend (LangGraph) exist
 LLM node config (`FR-1.3`) needs to decide whether to hardcode one vendor or expose provider choice.
 
 **Decision.** The schema's LLM node config includes explicit `provider` and `model` fields, mapped
-directly onto LangChain's existing provider registry. AgentDraft does not build its own provider
+directly onto LangChain's existing provider registry. Agentic Graph Composer does not build its own provider
 abstraction.
 
 **Alternatives.**
 - **Hardcode a single provider for Phase 1** (e.g. Anthropic only). Rejected: locks users into one
   vendor from day one and is more costly to retrofit later than to expose the provider field now,
   given LangChain already provides multi-provider support for free.
-- **Build AgentDraft's own provider abstraction/registry.** Rejected: this is the opposite mistake
+- **Build Agentic Graph Composer's own provider abstraction/registry.** Rejected: this is the opposite mistake
   from `ADR-003` — LangChain's provider interface already has multiple real, battle-tested
   consumers, so building a second one duplicates effort and drifts from upstream as new providers
   are added there.
 
 **Consequences.**
-- `+` Users pick a provider per node with zero AgentDraft-authored provider-specific code.
-- `+` New providers LangChain adds upstream work automatically, no AgentDraft changes needed.
+- `+` Users pick a provider per node with zero Agentic Graph Composer-authored provider-specific code.
+- `+` New providers LangChain adds upstream work automatically, no Agentic Graph Composer changes needed.
 - `−` The schema's LLM config is coupled to the shape of LangChain's provider interface (provider
   name strings, parameter names); if that shape changes upstream, the schema's LLM config section
   may need to change too.
@@ -179,7 +179,7 @@ possibly change existing ones. Without a version marker, there is no way to dist
 new parser" from "malformed schema" — both look like the same class of error.
 
 **Decision.** Every schema file includes a required `schema_version` field, identifying which version
-of the AgentDraft schema format it targets (`FR-1.10`). Phase 1 ships as `schema_version: 1`.
+of the Agentic Graph Composer schema format it targets (`FR-1.10`). Phase 1 ships as `schema_version: 1`.
 
 **Alternatives.**
 - **No version field; treat the schema format as always-current.** Rejected: cheap now, but any
@@ -193,7 +193,7 @@ of the AgentDraft schema format it targets (`FR-1.10`). Phase 1 ships as `schema
 
 **Consequences.**
 - `+` A version mismatch produces a specific, actionable error ("this file targets schema version
-  N, this AgentDraft build supports version M") instead of a generic parse failure.
+  N, this Agentic Graph Composer build supports version M") instead of a generic parse failure.
 - `+` Establishes the hook future migration tooling would need, without building that tooling now —
   consistent with the governing principle (`README`): the version field itself has an immediate
   consumer (clear-error validation, `FR-1.10`), migration tooling does not yet and isn't built.
@@ -215,7 +215,7 @@ resolves that deferred boundary now that Phase 2 planning has started, scoped to
 **Decision.**
 - **Frontend:** a local web app, not Electron, built with React + TypeScript + Vite.
 - **Data interface:** a static JSON export of the compiled graph structure — no running backend
-  process. `agentdraft explain <schema> --format json` (`FR-3.5`) is the canvas's sole data
+  process. `agc explain <schema> --format json` (`FR-3.5`) is the canvas's sole data
   source; the canvas loads a JSON file client-side (browser File API), with no HTTP API and no
   live process talking to the Python compiler.
 - **Graph rendering:** React Flow (`@xyflow/react`) for node/edge rendering, pan/zoom, and layout
@@ -264,7 +264,7 @@ growing (memory config `FR-1.7`, sandboxing `FR-1.8`, multi-agent composition `F
 still coming per [PRD](PRD.md)) — whatever write-back mechanism is chosen either reuses those
 rules or re-implements a second copy of them.
 
-**Decision.** `agentdraft canvas <schema>` starts a small local HTTP server (Python stdlib
+**Decision.** `agc canvas <schema>` starts a small local HTTP server (Python stdlib
 `http.server.ThreadingHTTPServer`, no new dependency), bound to `127.0.0.1` only, no
 authentication (`NFR-4.2`). It exposes `GET /api/graph` (current `schema_structure`, reloaded
 from disk each call) and `POST /api/save` (`FR-4.3`): the request body is parsed via
@@ -310,36 +310,36 @@ the zero-alternatives situation `ADR-003` ruled out building against.
 
 **Decision.** The schema gains an optional `checkpointer` block (`backend: sqlite` (default) `|
 postgres`, plus backend-specific connection info) that the compiler passes to LangGraph's own
-checkpointer classes at `StateGraph.compile()` time (`FR-5.1`). `agentdraft run <schema> --resume
+checkpointer classes at `StateGraph.compile()` time (`FR-5.1`). `agc run <schema> --resume
 <thread_id>` re-invokes the compiled graph against that `thread_id` so LangGraph's own
-checkpoint-replay logic resumes execution (`FR-5.3`) - AgentDraft does not implement resume logic
+checkpoint-replay logic resumes execution (`FR-5.3`) - Agentic Graph Composer does not implement resume logic
 itself. A schema with no `checkpointer` block runs exactly as before (`FR-5.5`) - this is additive,
 not a breaking change to existing schemas.
 
 **Alternatives.**
-- **Build an AgentDraft-owned checkpoint format, independent of LangGraph.** Rejected: violates
+- **Build an Agentic Graph Composer-owned checkpoint format, independent of LangGraph.** Rejected: violates
   design tenet 4 ([ARCHITECTURE §1](ARCHITECTURE.md#1-design-tenets)) - compile to the real thing,
   don't reimplement it. LangGraph already solves checkpoint/replay correctly; reimplementing it
   would be pure duplicated risk for no capability gain.
-- **SQLite-only, no Postgres option in v1.** Rejected: unlike AgentDraft's own bespoke local
+- **SQLite-only, no Postgres option in v1.** Rejected: unlike Agentic Graph Composer's own bespoke local
   storage (`ADR-010`), Postgres support already exists in LangGraph for free. Exposing it is a
   one-field passthrough onto an existing upstream interface, the same precedent `ADR-005` set for
-  LLM providers - not a new abstraction AgentDraft has to build or maintain.
+  LLM providers - not a new abstraction Agentic Graph Composer has to build or maintain.
 
 **Consequences.**
 - `+` Zero reimplementation; resumability inherits LangGraph's own tested checkpoint/replay
-  semantics rather than a parallel, AgentDraft-specific one.
+  semantics rather than a parallel, Agentic Graph Composer-specific one.
 - `+` Postgres is available to users who want centralized or shared durability, at zero extra
-  AgentDraft code beyond a config field and a connection string read from the environment (same
+  Agentic Graph Composer code beyond a config field and a connection string read from the environment (same
   secrets convention as LLM API keys - never inline in the schema).
-- `−` AgentDraft is now coupled to the shape of LangGraph's checkpointer interface, on top of the
+- `−` Agentic Graph Composer is now coupled to the shape of LangGraph's checkpointer interface, on top of the
   existing `StateGraph` coupling `ADR-003` already accepted. A breaking upstream change to that
   interface has no abstraction layer to absorb it.
 - `−` A schema with `checkpointer.backend: postgres` has an external runtime dependency (a
   reachable Postgres instance) that SQLite-backed schemas don't; the local-first default stays
   dependency-free, but this deliberately opens a non-local option.
 - `−` Checkpoint resume covers graph *state*, not the real-world side effects of already-executed
-  custom-code nodes (e.g. a tool call that already sent an email). AgentDraft does not attempt to
+  custom-code nodes (e.g. a tool call that already sent an email). Agentic Graph Composer does not attempt to
   solve at-least-once/exactly-once semantics for those side effects - the same accepted trust
   boundary the custom-code escape hatch (`ADR-004`) already carries: the author's code, the
   author's responsibility.
@@ -348,19 +348,19 @@ not a breaking change to existing schemas.
 
 ## ADR-010 - Local persistence store: single shared SQLite file, no DB abstraction
 
-**Context.** Schema version history and run history are AgentDraft-owned data with no upstream
+**Context.** Schema version history and run history are Agentic Graph Composer-owned data with no upstream
 library to lean on - unlike `ADR-009`'s checkpointing, there is no existing multi-backend interface
 to pass through. Both need a local store. The idea of a future swappable/pluggable database was
 raised, but nothing today needs it - the same shape of premature-abstraction risk `ADR-003` already
 named for execution backends.
 
-**Decision.** A single shared SQLite file (`.agentdraft/state.db` by default, alongside the schema
-being worked on) holds AgentDraft-owned tables - `schema_versions` (`FR-9.1` schema version history)
+**Decision.** A single shared SQLite file (`.agc/state.db` by default, alongside the schema
+being worked on) holds Agentic Graph Composer-owned tables - `schema_versions` (`FR-9.1` schema version history)
 and `runs` (`FR-6.1` run ledger) - plus, when `checkpointer.backend: sqlite` (`ADR-009`), LangGraph's
 own checkpoint tables in the same physical file (see [DATA-MODEL](DATA-MODEL.md)). No database
 abstraction layer, no ORM, no swappable backend for this store - stdlib `sqlite3`, directly. This
 extends `ADR-003`'s governing principle to storage: no abstraction is built until a second real
-backend need exists for AgentDraft-owned data.
+backend need exists for Agentic Graph Composer-owned data.
 
 **Alternatives.**
 - **Separate SQLite files per feature** (`versions.db`, `runs.db`). Rejected: gives up the free join
@@ -379,7 +379,7 @@ backend need exists for AgentDraft-owned data.
 - `−` If a hosted/multi-user version is ever pursued (already a deferred, not excluded, PRD
   non-goal), this store gets replaced or fronted by something shared - an explicit, accepted future
   cost, the same shape as `ADR-003`'s own accepted cost for the execution backend.
-- `−` Concurrent writers (e.g. two `agentdraft run` processes against the same project at once)
+- `−` Concurrent writers (e.g. two `agc run` processes against the same project at once)
   share one SQLite file; SQLite's own locking applies (readers don't block readers, a writer blocks
   other writers briefly). Acceptable for the single local user this store is scoped to; not
   evaluated for concurrent multi-user load.
@@ -399,7 +399,7 @@ token usage as span attributes where the underlying LangChain response exposes i
 wrapping each compiled node's function at compile time, the same extension point `compiler.py`
 already uses to wrap a node for visit-tracking (`FR-1.12`). Export is OTLP-based, driven entirely
 by standard OpenTelemetry environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT` etc., `FR-7.3`) - no
-AgentDraft-specific config surface. AgentDraft ships no bundled trace-storage/UI backend (`FR-7.4`);
+Agentic Graph Composer-specific config surface. Agentic Graph Composer ships no bundled trace-storage/UI backend (`FR-7.4`);
 [OBSERVABILITY.md](OBSERVABILITY.md) documents self-hosted options (Langfuse, SigNoz, HyperDX,
 Arize Phoenix) users may point OTLP at.
 
@@ -409,10 +409,10 @@ Arize Phoenix) users may point OTLP at.
   sub-runs tagged `langsmith:hidden` with no `name` and only a `metadata['langgraph_node']` key to
   identify the real node - reliably filtering these down to "one clean span per node" means
   depending on an undocumented, version-coupled internal convention. Wrapping the node function
-  AgentDraft already owns gets an equally real span, with real start/end times and direct access to
+  Agentic Graph Composer already owns gets an equally real span, with real start/end times and direct access to
   the node's own return value for token-usage extraction, none of that fragility.
-- **Build a bespoke AgentDraft-specific tracing format and local viewer.** Rejected: duplicates
-  what OpenTelemetry already standardizes, locks users into an AgentDraft-only tool, and is a much
+- **Build a bespoke Agentic Graph Composer-specific tracing format and local viewer.** Rejected: duplicates
+  what OpenTelemetry already standardizes, locks users into an Agentic Graph Composer-only tool, and is a much
   larger build than emitting standard OTel spans.
 - **Bundle a specific backend** (e.g. ship a Langfuse integration as the default/only path).
   Rejected: picks a vendor/opinion for every user regardless of their existing stack - the same
@@ -420,7 +420,7 @@ Arize Phoenix) users may point OTLP at.
   telemetry sinks.
 
 **Consequences.**
-- `+` Vendor-neutral: any OTLP-compatible backend works with zero AgentDraft code changes, today or
+- `+` Vendor-neutral: any OTLP-compatible backend works with zero Agentic Graph Composer code changes, today or
   in the future.
 - `+` No new always-on infrastructure for users who don't set the OTLP env var - `opentelemetry-api`'s
   own default (no provider ever installed) creates non-recording spans, verified directly: zero
@@ -429,13 +429,13 @@ Arize Phoenix) users may point OTLP at.
   `{node}__tools` tool-execution nodes the compiler adds internally - a deliberate scope match to
   what a schema author thinks of as "a node" (`FR-3.5`'s `schema_structure`), not every LangGraph
   implementation detail.
-- `−` AgentDraft takes a new direct (non-optional) dependency on `opentelemetry-sdk` and an OTLP/HTTP
+- `−` Agentic Graph Composer takes a new direct (non-optional) dependency on `opentelemetry-sdk` and an OTLP/HTTP
   exporter purely for instrumentation, even though it bundles no backend to send data to by default.
 - `−` No default local visualization out of the box - someone who wants to see a trace today must
   stand up, or point at an existing, OTel-compatible backend themselves. A deliberate cost of
   staying vendor-neutral, not an oversight.
 - `−` OTel's global tracer provider can be installed at most once per process (an OTel SDK
-  restriction, not an AgentDraft choice) - harmless for a real `agentdraft run` invocation (one
+  restriction, not an Agentic Graph Composer choice) - harmless for a real `agc run` invocation (one
   process per run), but means the "endpoint configured -> provider installed" code path is
   exercised by manual/smoke testing rather than the automated suite, to avoid one test's exporter
   configuration leaking into every later test in the same pytest process.
@@ -445,16 +445,16 @@ Arize Phoenix) users may point OTLP at.
 ## ADR-012 - Eval harness: separate file, deterministic assertions only
 
 **Context.** A schema or prompt edit can silently regress agent behavior with no automated way to
-catch it before the next `agentdraft run`. An eval/regression harness needs a home for test cases
+catch it before the next `agc run`. An eval/regression harness needs a home for test cases
 and a decision on what kinds of assertions it supports.
 
 **Decision.** Eval cases live in a separate YAML file, not embedded in the schema, referencing a
-schema by path (`FR-8.1`); `agentdraft eval <schema> <evals-file>` compiles the schema once and
+schema by path (`FR-8.1`); `agc eval <schema> <evals-file>` compiles the schema once and
 runs every case, asserting against final graph state using deterministic checks only - field
 equality, substring, regex - via a dotted/indexed path into the final state (`FR-8.2`, `FR-8.3`).
 A new exit code `4` (eval assertion failure) is appended to the CLI's exit-code taxonomy
 ([ARCHITECTURE §4.4](ARCHITECTURE.md#44-exit-codes)), distinct from `1`/`2`/`3` since the schema
-compiled and ran without error - the failure is in the agent's *behavior*, not AgentDraft's
+compiled and ran without error - the failure is in the agent's *behavior*, not Agentic Graph Composer's
 handling of it (`FR-8.4`).
 
 **Alternatives.**
@@ -490,7 +490,7 @@ per distinct content change, revision numbers never reused. Adding a "go back to
 command (`FR-9.5`) raises the same question git's `revert` vs. `reset` split answers differently:
 does going back rewrite/discard history, or add to it?
 
-**Decision.** `agentdraft schema revert <schema> <rev>` restores the working file to `rev`'s
+**Decision.** `agc schema revert <schema> <rev>` restores the working file to `rev`'s
 recorded content and records that as a **new** revision via the existing `record_revision`
 (git-`revert` semantics), rather than deleting or renumbering anything after `rev` (git-`reset`
 semantics). `record_revision`'s existing dedup-by-hash behavior already makes a no-op revert (target
@@ -520,7 +520,7 @@ content equals the current tip) safe - no duplicate row.
 
 ## ADR-014 - Resume schema-consistency guard
 
-**Context.** `agentdraft run --resume <thread_id>` (`ADR-009`) compiles whatever schema is currently
+**Context.** `agc run --resume <thread_id>` (`ADR-009`) compiles whatever schema is currently
 on disk and resumes LangGraph's checkpoint replay against it. If the schema changed - hand-edited, or
 restored via `schema revert` (`ADR-013`) - between the original run and the resume, this silently
 resumes against a *different compiled graph* than the one that produced the checkpoint: renamed or
@@ -533,7 +533,7 @@ the durability guarantee Phase 3 exists to provide (`NFR-7.1`).
 file's hash. A mismatch fails fast (exit `1`) before any execution, naming the problem explicitly;
 a new `--force` flag bypasses the check for a user who deliberately wants to resume against a
 changed schema. When no prior run is recorded for that `thread_id` (e.g. the run ledger was pruned,
-`FR-6.4`, or the checkpoint didn't originate from `agentdraft run`), there is no baseline to compare
+`FR-6.4`, or the checkpoint didn't originate from `agc run`), there is no baseline to compare
 against, so the guard is skipped rather than blocking (`FR-5.6`).
 
 **Alternatives.**
@@ -564,8 +564,8 @@ against, so the guard is skipped rather than blocking (`FR-5.6`).
 
 ## ADR-015 - Public distribution: canvas UI bundled into the Python wheel
 
-**Context.** AgentDraft has never been published anywhere - `pyproject.toml` had no PyPI-facing
-metadata, `canvas/package.json` is `private: true`, and `agentdraft canvas <schema>` only starts
+**Context.** Agentic Graph Composer has never been published anywhere - `pyproject.toml` had no PyPI-facing
+metadata, `canvas/package.json` is `private: true`, and `agc canvas <schema>` only starts
 the local editing API and tells the user to separately `cd canvas && npm run dev` from a cloned
 repo. A real `pip install`-only consumer has no `canvas/` source tree to `cd` into. ADR-007 flagged
 this exact gap as a future decision ("revisit if/when ... distribution to other authors makes a
@@ -574,25 +574,25 @@ Phase 3 (production hardening) is done and public distribution is the next phase
 [ROADMAP](ROADMAP.md)).
 
 An earlier version of this ADR chose to publish the canvas as its own independently-versioned npm
-package (`agentdraft-canvas`), consumed via `npx agentdraft-canvas --api-base <url>` alongside
-`agentdraft canvas`. That was reconsidered before implementation shipped: comparable local-first
+package (`agc-canvas`), consumed via `npx agc-canvas --api-base <url>` alongside
+`agc canvas`. That was reconsidered before implementation shipped: comparable local-first
 dev tools with a companion web UI - Streamlit, Jupyter Lab, MLflow, Prefect, Arize Phoenix, Gradio -
 all bundle their prebuilt frontend into the Python package instead, so one `pip install` gives a
-working UI with no separate Node.js install for the end user. Nothing embeds AgentDraft's canvas
-outside of AgentDraft itself today, so there is no real second consumer of it as a standalone JS
+working UI with no separate Node.js install for the end user. Nothing embeds Agentic Graph Composer's canvas
+outside of Agentic Graph Composer itself today, so there is no real second consumer of it as a standalone JS
 package - exactly the situation this project's own governing principle says not to build
 speculative decoupling for.
 
 **Decision.**
-- **The canvas frontend's prebuilt static assets ship inside the `agent-draft` Python wheel** -
+- **The canvas frontend's prebuilt static assets ship inside the `agentic-graph-composer` Python wheel** -
   no separate npm package, no second install command. A new Hatchling build hook
   (`hatch_build.py`) runs `npm ci && npm run build` in `canvas/` at wheel-build time (skipped if
   `canvas/dist` already exists, or if `npm` isn't on `PATH` - a Python-only contributor without
   Node still gets a working package, just without a bundled UI) and copies the output into
-  `src/agentdraft/canvas_static/`, which `pyproject.toml`'s `artifacts` config force-includes in
+  `src/agc/canvas_static/`, which `pyproject.toml`'s `artifacts` config force-includes in
   the wheel (it's generated, not tracked in git). Only whoever builds/publishes the wheel needs
   Node.js - never the end user installing it from PyPI.
-- **`agentdraft canvas <schema>` now serves both the JSON API and this bundled UI from one
+- **`agc canvas <schema>` now serves both the JSON API and this bundled UI from one
   process, one port.** `server.py` extends its existing `/api/*`-prefixed routing with a static
   file handler for everything else, falling back to `index.html` for any unmatched path (no
   client-side routing today, but a direct load of any path should still work), and refusing to
@@ -600,30 +600,30 @@ speculative decoupling for.
 - **The canvas's API base becomes runtime-configurable**, not just Vite's build-time
   `VITE_API_BASE`. The bundled static build is served on a different port every run (whatever the
   OS assigns), so the API base can't be baked in at `npm run build` time - it has to come from the
-  server that's actually serving it. `server.py` serves a synthetic `GET /agentdraft-config.js`
-  route that injects `window.__AGENTDRAFT_API_BASE__ = ""` (empty string = "same origin as this
+  server that's actually serving it. `server.py` serves a synthetic `GET /agc-config.js`
+  route that injects `window.__AGC_API_BASE__ = ""` (empty string = "same origin as this
   server"); `canvas/src/apiBase.ts` resolves `VITE_API_BASE` (still used by canvas contributors
-  running `npm run dev` against a separately-running `agentdraft canvas` instance, unaffected by
+  running `npm run dev` against a separately-running `agc canvas` instance, unaffected by
   any of this) with a fallback to that runtime value - checking `!== undefined` rather than
   truthiness, since an empty string is a real, meaningful "configured" value here, not an absence
   of one.
 
 **Alternatives.**
-- **Publish the canvas as its own npm package** (`agentdraft-canvas`, consumed via `npx
-  agentdraft-canvas --api-base <url>`). The initial decision, reconsidered as above - it keeps
+- **Publish the canvas as its own npm package** (`agc-canvas`, consumed via `npx
+  agc-canvas --api-base <url>`). The initial decision, reconsidered as above - it keeps
   release cadences fully independent, but at the cost of a second required install command and
   Node.js as a hard dependency for anyone who wants the UI at all, for no offsetting benefit given
   there's no real second consumer of the canvas as a standalone package today. Revisit if that
   changes (e.g. someone wants to embed the canvas's React Flow view in another app).
 - **Rewrite `index.html`'s `<script>` tag with the API base baked in at serve time**, instead of a
-  separate `/agentdraft-config.js` route. Rejected: mutating built HTML is fragile to Vite's build
+  separate `/agc-config.js` route. Rejected: mutating built HTML is fragile to Vite's build
   output format changing across versions; serving one additional static-looking JS file is a
   stable, mechanical contract that doesn't depend on `dist/index.html`'s exact shape.
 
 **Consequences.**
 - `+` Resolves ADR-007's open question with a concrete, implemented answer instead of a deferred
   "revisit later."
-- `+` `pip install agent-draft` followed by `agentdraft canvas <schema>` gives a fully working UI
+- `+` `pip install agentic-graph-composer` followed by `agc canvas <schema>` gives a fully working UI
   with zero Node.js involvement for the end user - the actual blocker this ADR sets out to fix,
   and the simplest possible consumer-facing story (one install, one command, one URL).
 - `+` The Python package and the canvas UI can never drift out of sync with each other (they ship
@@ -634,5 +634,5 @@ speculative decoupling for.
 - `−` Building a real (non-dev) wheel now requires Node.js/npm on whatever machine or CI runner
   does the build - `publish-python.yml` needs `actions/setup-node` alongside `actions/setup-python`.
   A plain `pip install -e ".[dev]"` for Python-only contributors still works without Node (the hook
-  degrades gracefully), and CI's main test job sets `AGENTDRAFT_SKIP_CANVAS_BUILD=1` to stay fast
+  degrades gracefully), and CI's main test job sets `AGC_SKIP_CANVAS_BUILD=1` to stay fast
   and deterministic regardless of what's on the runner.

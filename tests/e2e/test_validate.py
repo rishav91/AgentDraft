@@ -2,13 +2,13 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from agentdraft.cli import main
+from agc.cli import main
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "skeleton.yaml"
 BAD_FIXTURE = Path(__file__).parent.parent / "fixtures" / "invalid_provider.yaml"
 
 
-def test_agentdraft_validate_accepts_valid_schema() -> None:
+def test_agc_validate_accepts_valid_schema() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["validate", str(FIXTURE)])
 
@@ -16,7 +16,7 @@ def test_agentdraft_validate_accepts_valid_schema() -> None:
     assert "valid" in result.output
 
 
-def test_agentdraft_validate_rejects_invalid_schema() -> None:
+def test_agc_validate_rejects_invalid_schema() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["validate", str(BAD_FIXTURE)])
 
