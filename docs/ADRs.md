@@ -21,6 +21,7 @@ Referenced by ID (`ADR-00N`) from other docs.
 | [ADR-012](#adr-012---eval-harness-separate-file-deterministic-assertions-only) | Eval harness: separate file, deterministic assertions only | Accepted |
 | [ADR-013](#adr-013---schema-revert-additive-not-destructive) | Schema revert: additive, not destructive | Accepted |
 | [ADR-014](#adr-014---resume-schema-consistency-guard) | Resume schema-consistency guard | Accepted |
+| [ADR-015](#adr-015---public-distribution-canvas-ui-bundled-into-the-python-wheel) | Public distribution: canvas UI bundled into the Python wheel | Accepted |
 
 ---
 
@@ -224,7 +225,9 @@ resolves that deferred boundary now that Phase 2 planning has started, scoped to
 - **Electron.** Rejected for 2.1: a native desktop shell adds packaging/build/auto-update
   machinery disproportionate to a single-user, read-only viewer — nothing about read-only
   rendering needs OS-level integration. Revisit if/when 2.2 (editing) or distribution to other
-  authors ([PRD §3](PRD.md#3-personas)) makes a standalone app worth the packaging cost.
+  authors ([PRD §3](PRD.md#3-personas)) makes a standalone app worth the packaging cost. (Revisited:
+  [ADR-015](#adr-015---public-distribution-canvas-ui-bundled-into-the-python-wheel)
+  answers this without Electron - the prebuilt UI bundled into the Python wheel, not a native shell.)
 - **A local HTTP API serving compiled-graph JSON on demand.** Rejected for 2.1: introduces a
   long-running backend process (lifecycle, port management, CORS) for a sub-phase whose only
   requirement is rendering an already-compiled, static structure. A static export is the literal
@@ -397,7 +400,7 @@ wrapping each compiled node's function at compile time, the same extension point
 already uses to wrap a node for visit-tracking (`FR-1.12`). Export is OTLP-based, driven entirely
 by standard OpenTelemetry environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT` etc., `FR-7.3`) - no
 AgentDraft-specific config surface. AgentDraft ships no bundled trace-storage/UI backend (`FR-7.4`);
-[OBSERVABILITY.md](OBSERVABILITY.md) documents self-hosted OSS options (Langfuse, SigNoz, HyperDX,
+[OBSERVABILITY.md](OBSERVABILITY.md) documents self-hosted options (Langfuse, SigNoz, HyperDX,
 Arize Phoenix) users may point OTLP at.
 
 **Alternatives.**
@@ -556,3 +559,80 @@ against, so the guard is skipped rather than blocking (`FR-5.6`).
   known limitation rather than solved, since a fully robust version would need a way to protect a
   thread's runs from pruning while its checkpoint is still resumable - not built until that proves
   to be a real problem, per the project's governing principle.
+
+---
+
+## ADR-015 - Public distribution: canvas UI bundled into the Python wheel
+
+**Context.** AgentDraft has never been published anywhere - `pyproject.toml` had no PyPI-facing
+metadata, `canvas/package.json` is `private: true`, and `agentdraft canvas <schema>` only starts
+the local editing API and tells the user to separately `cd canvas && npm run dev` from a cloned
+repo. A real `pip install`-only consumer has no `canvas/` source tree to `cd` into. ADR-007 flagged
+this exact gap as a future decision ("revisit if/when ... distribution to other authors makes a
+standalone app worth the packaging cost") without resolving it. This ADR resolves it, now that
+Phase 3 (production hardening) is done and public distribution is the next phase (Phase 3.5,
+[ROADMAP](ROADMAP.md)).
+
+An earlier version of this ADR chose to publish the canvas as its own independently-versioned npm
+package (`agentdraft-canvas`), consumed via `npx agentdraft-canvas --api-base <url>` alongside
+`agentdraft canvas`. That was reconsidered before implementation shipped: comparable local-first
+dev tools with a companion web UI - Streamlit, Jupyter Lab, MLflow, Prefect, Arize Phoenix, Gradio -
+all bundle their prebuilt frontend into the Python package instead, so one `pip install` gives a
+working UI with no separate Node.js install for the end user. Nothing embeds AgentDraft's canvas
+outside of AgentDraft itself today, so there is no real second consumer of it as a standalone JS
+package - exactly the situation this project's own governing principle says not to build
+speculative decoupling for.
+
+**Decision.**
+- **The canvas frontend's prebuilt static assets ship inside the `agent-draft` Python wheel** -
+  no separate npm package, no second install command. A new Hatchling build hook
+  (`hatch_build.py`) runs `npm ci && npm run build` in `canvas/` at wheel-build time (skipped if
+  `canvas/dist` already exists, or if `npm` isn't on `PATH` - a Python-only contributor without
+  Node still gets a working package, just without a bundled UI) and copies the output into
+  `src/agentdraft/canvas_static/`, which `pyproject.toml`'s `artifacts` config force-includes in
+  the wheel (it's generated, not tracked in git). Only whoever builds/publishes the wheel needs
+  Node.js - never the end user installing it from PyPI.
+- **`agentdraft canvas <schema>` now serves both the JSON API and this bundled UI from one
+  process, one port.** `server.py` extends its existing `/api/*`-prefixed routing with a static
+  file handler for everything else, falling back to `index.html` for any unmatched path (no
+  client-side routing today, but a direct load of any path should still work), and refusing to
+  serve outside `canvas_static/` (path traversal).
+- **The canvas's API base becomes runtime-configurable**, not just Vite's build-time
+  `VITE_API_BASE`. The bundled static build is served on a different port every run (whatever the
+  OS assigns), so the API base can't be baked in at `npm run build` time - it has to come from the
+  server that's actually serving it. `server.py` serves a synthetic `GET /agentdraft-config.js`
+  route that injects `window.__AGENTDRAFT_API_BASE__ = ""` (empty string = "same origin as this
+  server"); `canvas/src/apiBase.ts` resolves `VITE_API_BASE` (still used by canvas contributors
+  running `npm run dev` against a separately-running `agentdraft canvas` instance, unaffected by
+  any of this) with a fallback to that runtime value - checking `!== undefined` rather than
+  truthiness, since an empty string is a real, meaningful "configured" value here, not an absence
+  of one.
+
+**Alternatives.**
+- **Publish the canvas as its own npm package** (`agentdraft-canvas`, consumed via `npx
+  agentdraft-canvas --api-base <url>`). The initial decision, reconsidered as above - it keeps
+  release cadences fully independent, but at the cost of a second required install command and
+  Node.js as a hard dependency for anyone who wants the UI at all, for no offsetting benefit given
+  there's no real second consumer of the canvas as a standalone package today. Revisit if that
+  changes (e.g. someone wants to embed the canvas's React Flow view in another app).
+- **Rewrite `index.html`'s `<script>` tag with the API base baked in at serve time**, instead of a
+  separate `/agentdraft-config.js` route. Rejected: mutating built HTML is fragile to Vite's build
+  output format changing across versions; serving one additional static-looking JS file is a
+  stable, mechanical contract that doesn't depend on `dist/index.html`'s exact shape.
+
+**Consequences.**
+- `+` Resolves ADR-007's open question with a concrete, implemented answer instead of a deferred
+  "revisit later."
+- `+` `pip install agent-draft` followed by `agentdraft canvas <schema>` gives a fully working UI
+  with zero Node.js involvement for the end user - the actual blocker this ADR sets out to fix,
+  and the simplest possible consumer-facing story (one install, one command, one URL).
+- `+` The Python package and the canvas UI can never drift out of sync with each other (they ship
+  in the same artifact), unlike the independent-packages alternative.
+- `−` The canvas UI's release cadence is now coupled to the Python package's - a canvas-only fix
+  requires a full backend patch release to reach end users. Accepted given there's no concrete
+  need for independent cadences today.
+- `−` Building a real (non-dev) wheel now requires Node.js/npm on whatever machine or CI runner
+  does the build - `publish-python.yml` needs `actions/setup-node` alongside `actions/setup-python`.
+  A plain `pip install -e ".[dev]"` for Python-only contributors still works without Node (the hook
+  degrades gracefully), and CI's main test job sets `AGENTDRAFT_SKIP_CANVAS_BUILD=1` to stay fast
+  and deterministic regardless of what's on the runner.
