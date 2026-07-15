@@ -1,0 +1,12 @@
+schema: skeleton.yaml
+cases:
+  - name: "equals assertion passes"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        equals: "Hello, world!"
+  - name: "contains assertion passes"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        contains: "world"

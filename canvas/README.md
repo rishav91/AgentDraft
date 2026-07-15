@@ -3,8 +3,28 @@
 Visualization and editing of a compiled AgentDraft schema (Phase 2.1/2.2 — see
 [../docs/ROADMAP.md](../docs/ROADMAP.md), [../docs/ADRs.md](../docs/ADRs.md) ADR-007/ADR-008).
 
-Standalone React + TypeScript + Vite app, separate from the Python package. It has two modes,
-selected by whether `VITE_API_BASE` is set — no code changes needed to switch between them.
+React + TypeScript + Vite app. Its prebuilt static assets ship bundled inside the `agent-draft`
+Python wheel (`ADR-015`) - most users never touch this directory at all, they just run
+`agentdraft canvas <schema.yaml>` (see the root [README](../README.md)). This directory is for
+building that bundle and for contributors working on the UI itself.
+
+It has three modes, selected by whether an API base is configured (via `VITE_API_BASE` at build
+time, or `window.__AGENTDRAFT_API_BASE__` at runtime, injected by `agentdraft canvas`'s own
+server, `ADR-015`) - no code changes needed to switch between them.
+
+## Bundled mode (what `agentdraft canvas` actually runs, Phase 3.5)
+
+Nothing to do here - `pip install agent-draft` already contains a prebuilt copy of this app.
+`agentdraft canvas <schema.yaml>` serves it directly, on the same port as the editing API:
+
+```sh
+agentdraft canvas schema.yaml   # open the URL it prints - that's it
+```
+
+`server.py` serves this directory's prebuilt `dist/` plus a synthetic `GET /agentdraft-config.js`
+route that sets `window.__AGENTDRAFT_API_BASE__ = ""` (same origin as the server itself) -
+`src/apiBase.ts` resolves that with a fallback from `VITE_API_BASE`, so this mode and the
+dev-server mode below share the same app code with no divergence.
 
 ## View-only mode (no backend, Phase 2.1)
 
@@ -22,9 +42,10 @@ agentdraft explain <schema.yaml> --format json > graph.json
 Open the running app and load `graph.json` via the file picker or drag-and-drop. No interface to
 the Python compiler beyond that one file — no backend process, no live connection.
 
-## Editing mode (local API server, Phase 2.2)
+## Editing mode (local API server, from source, Phase 2.2)
 
-From the main repo, start the local editing API for a schema:
+For contributors iterating on the UI itself, with fast HMR against a real running API instead of a
+rebuild-and-reload cycle. From the main repo, start the local editing API for a schema:
 
 ```sh
 agentdraft canvas <schema.yaml>
@@ -58,4 +79,5 @@ Everything `agentdraft explain` prints: node ids, `llm` (provider/model) vs `han
 (custom-code reference), bound tools, and edges — direct or conditional (labeled by route key,
 dashed). No divergence from the text `explain` output is the Phase 2.1 exit criterion.
 
-Not yet covered: JS test coverage / CI (2.3, in progress).
+JS test coverage and CI are covered by the `canvas:` job in `.github/workflows/ci.yml` (lint,
+typecheck+build, Vitest, Playwright e2e) - shipped as Phase 2.3.

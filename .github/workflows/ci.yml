@@ -15,7 +15,21 @@ jobs:
           python-version: "3.11"
 
       - name: Install package with dev dependencies
-        run: pip install -e ".[dev]"
+        # [postgres] and [examples] are both required here, not just [dev]:
+        # - [postgres]: the postgres checkpointer code path (compiler.py)
+        #   and its own unit test (patches real psycopg/
+        #   langgraph.checkpoint.postgres attributes) need it genuinely
+        #   importable, and mypy can't resolve those imports' types
+        #   without it either.
+        # - [examples]: several unit/e2e tests compile a real anthropic-
+        #   provider schema without mocking init_chat_model, which needs
+        #   langchain-anthropic importable to construct the client at all.
+        run: pip install -e ".[dev,examples,postgres]"
+        env:
+          # This job doesn't need a real bundled canvas UI (ADR-015) - skip
+          # the hatch_build.py hook's npm build for a faster, deterministic
+          # install regardless of what Node happens to be on this runner.
+          AGENTDRAFT_SKIP_CANVAS_BUILD: "1"
 
       - name: Lint (ruff)
         run: ruff check .
@@ -43,6 +57,11 @@ jobs:
 
       - name: Install agentdraft (needed by the e2e test to spawn `agentdraft canvas`)
         run: pip install -e ".[dev]"
+        env:
+          # This job builds canvas itself in the steps below for its own
+          # testing purposes - the hatch_build.py hook doing it a second
+          # time (via a different npm install) here would be redundant.
+          AGENTDRAFT_SKIP_CANVAS_BUILD: "1"
 
       - uses: actions/setup-node@v4
         with:

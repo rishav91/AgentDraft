@@ -10,10 +10,19 @@ from unittest.mock import patch
 
 import pytest
 
+import agentdraft.server as server_module
 from agentdraft.schema import SUPPORTED_PROVIDERS, load_schema
 from agentdraft.server import create_server, run_canvas_server
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "comprehensive.yaml"
+
+
+def _get_raw(url: str) -> tuple[int, bytes, str]:
+    try:
+        with urllib.request.urlopen(url) as response:  # noqa: S310 - localhost test server
+            return response.status, response.read(), response.headers["Content-Type"]
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(), exc.headers["Content-Type"]
 
 
 @pytest.fixture
@@ -430,3 +439,102 @@ def test_run_canvas_server_prints_url_and_stops_on_keyboard_interrupt(
     output = capsys.readouterr().out
     assert "AGENTDRAFT_CANVAS_URL=http://127.0.0.1:" in output
     assert "stopping" in output
+
+
+@pytest.fixture
+def bundled_static_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Points server._STATIC_DIR at a fake bundled canvas UI (ADR-015),
+    regardless of whether this checkout has a real one built.
+    """
+    static_dir = tmp_path / "canvas_static"
+    static_dir.mkdir()
+    (static_dir / "index.html").write_text("<html>root</html>")
+    assets_dir = static_dir / "assets"
+    assets_dir.mkdir()
+    (assets_dir / "app.js").write_text("console.log('hi')")
+    monkeypatch.setattr(server_module, "_STATIC_DIR", static_dir)
+    return static_dir
+
+
+def test_static_root_serves_index_html_when_bundled(
+    bundled_static_dir: Path, running_server: tuple[str, Path]
+) -> None:
+    base_url, _ = running_server
+
+    status, body, content_type = _get_raw(f"{base_url}/")
+
+    assert status == 200
+    assert body == b"<html>root</html>"
+    assert "text/html" in content_type
+
+
+def test_static_serves_a_nested_asset_with_its_content_type(
+    bundled_static_dir: Path, running_server: tuple[str, Path]
+) -> None:
+    base_url, _ = running_server
+
+    status, body, content_type = _get_raw(f"{base_url}/assets/app.js")
+
+    assert status == 200
+    assert body == b"console.log('hi')"
+    assert "javascript" in content_type
+
+
+def test_static_falls_back_to_index_html_for_an_unknown_path(
+    bundled_static_dir: Path, running_server: tuple[str, Path]
+) -> None:
+    base_url, _ = running_server
+
+    status, body, _ = _get_raw(f"{base_url}/some/deep/path")
+
+    assert status == 200
+    assert body == b"<html>root</html>"
+
+
+def test_static_refuses_to_escape_the_bundled_directory(
+    bundled_static_dir: Path, running_server: tuple[str, Path]
+) -> None:
+    base_url, _ = running_server
+
+    # urllib normalizes ".." before the request is even sent for a plain GET,
+    # so this exercises the same path through url-encoded traversal segments.
+    status, body, _ = _get_raw(f"{base_url}/%2e%2e/%2e%2e/etc/passwd")
+
+    assert status == 200
+    assert body == b"<html>root</html>"  # falls back to index.html, not an escape
+
+
+def test_static_returns_404_json_when_canvas_ui_is_not_bundled(
+    running_server: tuple[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base_url, _ = running_server
+    monkeypatch.setattr(server_module, "_STATIC_DIR", Path("/no/such/directory"))
+
+    status, body = _get(f"{base_url}/")
+
+    assert status == 404
+    assert "errors" in body
+
+
+def test_static_returns_404_json_when_dir_exists_but_has_no_index_html(
+    running_server: tuple[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    empty_static_dir = tmp_path / "empty_canvas_static"
+    empty_static_dir.mkdir()
+    monkeypatch.setattr(server_module, "_STATIC_DIR", empty_static_dir)
+    base_url, _ = running_server
+
+    status, body = _get(f"{base_url}/")
+
+    assert status == 404
+    assert "errors" in body
+
+
+def test_agentdraft_config_js_reports_same_origin(running_server: tuple[str, Path]) -> None:
+    base_url, _ = running_server
+
+    status, body, content_type = _get_raw(f"{base_url}/agentdraft-config.js")
+
+    assert status == 200
+    assert body == b'window.__AGENTDRAFT_API_BASE__ = "";\n'
+    assert "javascript" in content_type

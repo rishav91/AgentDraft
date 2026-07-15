@@ -1,17 +1,22 @@
+import sqlite3
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from langgraph.checkpoint.sqlite import SqliteSaver
 from pydantic import ValidationError
 
 from agentdraft.compiler import (
     CompileError,
+    build_checkpointer,
     compile_schema,
     explain_schema,
     schema_from_structure,
     schema_structure,
 )
-from agentdraft.schema import Edge, LLMConfig, Node, Schema
+from agentdraft.schema import Checkpointer, Edge, LLMConfig, Node, Schema
 
 
 def _make_schema(system: str | None = "be terse") -> Schema:
@@ -619,3 +624,76 @@ def test_schema_from_structure_raises_validation_error_on_invalid_graph() -> Non
                 "edges": [],
             }
         )
+
+
+def test_build_checkpointer_returns_none_when_unset() -> None:
+    assert build_checkpointer(None) is None
+
+
+def test_compile_schema_without_checkpointer_has_none() -> None:
+    graph = compile_schema(_make_schema())
+
+    assert not graph.checkpointer
+
+
+def test_compile_schema_with_sqlite_checkpointer_creates_local_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    schema = Schema(
+        schema_version=1,
+        nodes=[Node(id="chat", llm=LLMConfig(provider="anthropic", model="claude-sonnet-5"))],
+        checkpointer=Checkpointer(backend="sqlite"),
+    )
+
+    graph = compile_schema(schema)
+
+    assert isinstance(graph.checkpointer, SqliteSaver)
+    db_path = tmp_path / ".agentdraft" / "state.db"
+    assert db_path.exists()
+    tables = {
+        row[0]
+        for row in sqlite3.connect(db_path).execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )
+    }
+    assert {"checkpoints", "writes"} <= tables
+
+
+def test_build_checkpointer_postgres_requires_dsn_env_var_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MISSING_PG_DSN", raising=False)
+    checkpointer = Checkpointer(backend="postgres", dsn_env="MISSING_PG_DSN")
+
+    with pytest.raises(CompileError, match="MISSING_PG_DSN"):
+        build_checkpointer(checkpointer)
+
+
+def test_build_checkpointer_postgres_missing_extra(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PG_DSN", "postgresql://localhost/test")
+    monkeypatch.setitem(sys.modules, "psycopg", None)
+    checkpointer = Checkpointer(backend="postgres", dsn_env="PG_DSN")
+
+    with pytest.raises(CompileError, match="requires the optional postgres extra"):
+        build_checkpointer(checkpointer)
+
+
+def test_build_checkpointer_postgres_wires_dsn_and_calls_setup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PG_DSN", "postgresql://localhost/test")
+    checkpointer = Checkpointer(backend="postgres", dsn_env="PG_DSN")
+
+    mock_conn = MagicMock()
+    mock_saver = MagicMock()
+    with (
+        patch("psycopg.Connection.connect", return_value=mock_conn) as mock_connect,
+        patch("langgraph.checkpoint.postgres.PostgresSaver", return_value=mock_saver),
+    ):
+        result = build_checkpointer(checkpointer)
+
+    assert mock_connect.call_args.args == ("postgresql://localhost/test",)
+    assert mock_connect.call_args.kwargs["autocommit"] is True
+    mock_saver.setup.assert_called_once()
+    assert result is mock_saver

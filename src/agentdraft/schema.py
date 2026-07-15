@@ -8,11 +8,13 @@ START -> node -> END, preserving Phase 0 skeleton schemas.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from langchain.chat_models.base import _SUPPORTED_PROVIDERS
 from pydantic import BaseModel, Field, ValidationError, model_validator
+
+from agentdraft.versions import record_revision
 
 # Sorted, public re-export of the same set _check_providers validates against
 # (FR-1.3, ADR-005) - the canvas's provider dropdown reads this (FR-4.6) so it
@@ -105,10 +107,34 @@ class Edge(BaseModel):
         return self
 
 
+class Checkpointer(BaseModel):
+    """Opt-in checkpointing config (`FR-5.1`, `ADR-009`) - a thin passthrough to
+    LangGraph's own `SqliteSaver`/`PostgresSaver`, not an AgentDraft-built abstraction.
+    """
+
+    backend: Literal["sqlite", "postgres"] = "sqlite"
+    dsn_env: str | None = None
+
+    @model_validator(mode="after")
+    def _check_dsn(self) -> "Checkpointer":
+        if self.backend == "postgres" and not self.dsn_env:
+            raise ValueError(
+                "checkpointer.dsn_env is required when backend is 'postgres' - name the "
+                "environment variable holding the connection string (never inline it)"
+            )
+        if self.backend == "sqlite" and self.dsn_env is not None:
+            raise ValueError(
+                "checkpointer.dsn_env is only valid when backend is 'postgres' - the sqlite "
+                "backend uses the shared local store (ADR-010) with no configuration"
+            )
+        return self
+
+
 class Schema(BaseModel):
     schema_version: int
     nodes: list[Node]
     edges: list[Edge] = []
+    checkpointer: Checkpointer | None = None
 
     @model_validator(mode="after")
     def _check_version(self) -> "Schema":
@@ -231,6 +257,12 @@ def dump_schema(schema: Schema) -> dict[str, Any]:
             edges.append(edge_entry)
         result["edges"] = edges
 
+    if schema.checkpointer is not None:
+        checkpointer: dict[str, Any] = {"backend": schema.checkpointer.backend}
+        if schema.checkpointer.dsn_env is not None:
+            checkpointer["dsn_env"] = schema.checkpointer.dsn_env
+        result["checkpointer"] = checkpointer
+
     return result
 
 
@@ -240,5 +272,9 @@ def schema_to_yaml(schema: Schema) -> str:
 
 
 def save_schema(schema: Schema, path: str | Path) -> None:
-    """Write a Schema to PATH as YAML (FR-4.3)."""
-    Path(path).write_text(schema_to_yaml(schema))
+    """Write a Schema to PATH as YAML (FR-4.3), recording a new local revision
+    unless the content is unchanged from the last recorded one (FR-9.1).
+    """
+    content = schema_to_yaml(schema)
+    Path(path).write_text(content)
+    record_revision(path, content)

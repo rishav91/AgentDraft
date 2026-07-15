@@ -1,0 +1,7 @@
+schema: does-not-exist.yaml
+cases:
+  - name: "irrelevant"
+    input: "hi"
+    assert:
+      - path: messages[-1].content
+        equals: "Hello, world!"

@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 
 import { fetchGraph } from "./api";
+import { resolveApiBase } from "./apiBase";
 import { Editor } from "./Editor";
 import { FileLoader } from "./FileLoader";
 import { GraphCanvas } from "./GraphCanvas";
 import type { GraphStructure } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = resolveApiBase();
 
 export function App() {
-  return API_BASE ? <ApiApp apiBase={API_BASE} /> : <ViewOnlyApp />;
+  // "" (same origin, ADR-015) counts as configured - only a genuinely unset
+  // API_BASE means no backend at all (view-only mode).
+  return API_BASE !== undefined ? <ApiApp apiBase={API_BASE} /> : <ViewOnlyApp />;
 }
 
 // Unchanged from Phase 2.1: no API configured -> static file picker, read-only canvas.
