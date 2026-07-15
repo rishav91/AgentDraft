@@ -51,7 +51,7 @@ Listed here as starting points, not endorsements requiring any particular one:
 | Backend | Why it might fit | Notes |
 |---|---|---|
 | **Langfuse** | Purpose-built for LLM/agent traces: prompts, completions, token cost, per-node latency, plus an eval/scoring UI | OSS, self-hostable, has a native LangChain callback handler if a user wants deeper integration than plain OTLP |
-| **Arize Phoenix** | Also purpose-built for LLM traces; can run fully local/embedded, no server to stand up for quick local inspection | OSS, OTel-native |
+| **Arize Phoenix** | Also purpose-built for LLM traces; can run fully local/embedded, no server to stand up for quick local inspection | Source-available (Elastic License 2.0, not OSI-approved OSS), free to self-host, OTel-native |
 | **SigNoz** | General-purpose OTel-native APM (traces + metrics + logs), ClickHouse-backed | OSS, self-hostable; a good fit if a user wants AgentDraft traces alongside other services' telemetry in one place |
 | **HyperDX** | Same category as SigNoz - OTel-native, ClickHouse-backed, unified traces/metrics/logs | OSS, self-hostable |
 
